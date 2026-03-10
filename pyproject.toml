@@ -18,6 +18,11 @@ dev = [
   "pytest>=8.0",
   "ruff>=0.7.0"
 ]
+modeling = [
+  "pandas>=2.2",
+  "numpy>=2.0",
+  "scikit-learn>=1.5"
+]
 notebook = [
   "ipykernel>=7.0",
   "ipython>=9.0",
