@@ -15,6 +15,7 @@ dependencies = []
 
 [dependency-groups]
 dev = [
+  "pre-commit>=4.0",
   "pytest>=8.0",
   "ruff>=0.7.0"
 ]
@@ -44,4 +45,8 @@ line-length = 100
 target-version = "py314"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B"]
+select = ["E", "F", "I", "B", "RET", "RSE", "S", "T10", "T20", "UP", "RUF100"]
+ignore = ["E501", "RET503"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]
