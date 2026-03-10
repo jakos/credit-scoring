@@ -39,13 +39,14 @@ def train_test_split_stratified(
     random_state: int = 42,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
     """Create stratified train/test split for classification."""
-    return train_test_split(
+    X_train, X_test, y_train, y_test = train_test_split(
         x,
         y,
         test_size=test_size,
         random_state=random_state,
         stratify=y,
     )
+    return X_train, X_test, y_train, y_test
 
 
 def build_preprocessor(feature_columns: list[str]) -> ColumnTransformer:

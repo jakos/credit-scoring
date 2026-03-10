@@ -6,7 +6,14 @@ Starter Python project template for credit scoring experiments and services.
 
 ```bash
 uv sync --group dev
+py -3.14 -m uv run pre-commit install
 uv run pytest
+```
+
+Run hooks manually on all files:
+
+```bash
+py -3.14 -m uv run pre-commit run --all-files
 ```
 
 ## Project Structure
