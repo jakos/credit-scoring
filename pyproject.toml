@@ -13,6 +13,9 @@ authors = [
 ]
 dependencies = []
 
+[project.scripts]
+train-model = "credit_scoring.modeling.main:main"
+
 [dependency-groups]
 dev = [
   "pre-commit>=4.0",
