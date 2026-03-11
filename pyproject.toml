@@ -20,6 +20,7 @@ train-model = "credit_scoring.modeling.main:main"
 dev = [
   "pre-commit>=4.0",
   "pytest>=8.0",
+  "pytest-cov>=6.0",
   "ruff>=0.7.0"
 ]
 modeling = [
@@ -42,6 +43,10 @@ packages = ["src/credit_scoring"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+addopts = [
+  "--cov=credit_scoring",
+  "--cov-report=term-missing"
+]
 
 [tool.ruff]
 line-length = 100
