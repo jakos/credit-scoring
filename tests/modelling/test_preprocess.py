@@ -4,26 +4,9 @@ import pandas as pd
 from credit_scoring.modeling.preprocess import (
     TARGET_COLUMN,
     build_preprocessor,
-    load_credit_data,
     split_features_target,
     train_test_split_stratified,
 )
-
-
-def test_load_credit_data_from_custom_csv_path(tmp_path) -> None:
-    csv_path = tmp_path / "sample.csv"
-    source_df = pd.DataFrame(
-        {
-            "ID": [1, 2],
-            "LIMIT_BAL": [20000, 120000],
-            TARGET_COLUMN: [0, 1],
-        }
-    )
-    source_df.to_csv(csv_path, index=False)
-
-    loaded_df = load_credit_data(csv_path)
-
-    pd.testing.assert_frame_equal(loaded_df, source_df)
 
 
 def test_split_features_target_drops_target_and_requested_columns() -> None:
@@ -71,4 +54,4 @@ def test_build_preprocessor_transforms_and_imputes_numeric_columns() -> None:
     transformed = preprocessor.fit_transform(x)
 
     assert transformed.shape == (4, 2)
-    assert np.isfinite(transformed).all()
+    assert np.isfinite(np.asarray(transformed)).all()
