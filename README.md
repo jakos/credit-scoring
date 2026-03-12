@@ -2,6 +2,10 @@
 
 Starter Python project template for credit scoring experiments and services.
 
+## Roadmap
+
+See the project roadmap: [ROADMAP.md](ROADMAP.md)
+
 ## Quick Start
 
 ```bash
