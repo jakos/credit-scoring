@@ -24,6 +24,7 @@ dev = [
   "ruff>=0.7.0"
 ]
 modeling = [
+  "mlflow>=2.16",
   "pandas>=2.2",
   "numpy>=2.0",
   "scikit-learn>=1.5"
