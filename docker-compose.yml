@@ -1,4 +1,114 @@
 services:
+  postgres:
+    image: postgres:16
+    container_name: credit-scoring-postgres
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  airflow-init:
+    image: apache/airflow:2.10.5
+    container_name: credit-scoring-airflow-init
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      AIRFLOW__WEBSERVER__SECRET_KEY: dev-airflow-secret
+      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.session,airflow.api.auth.backend.basic_auth
+      AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
+      PYTHONPATH: /opt/airflow/project/src
+      _PIP_ADDITIONAL_REQUIREMENTS: pandas==2.2.3 numpy==2.2.2 scikit-learn==1.6.1
+    command: >
+      bash -c "
+      set -euo pipefail;
+      if [ -z "${AIRFLOW_ADMIN_PASSWORD:-}" ]; then
+        echo 'AIRFLOW_ADMIN_PASSWORD is empty. Set it in .env before starting Airflow.';
+        exit 1;
+      fi;
+      airflow db migrate;
+      if airflow users list | grep -q ' admin '; then
+        airflow users reset-password --username admin --password "${AIRFLOW_ADMIN_PASSWORD}";
+      else
+        airflow users create
+          --username admin
+          --password "${AIRFLOW_ADMIN_PASSWORD}"
+          --firstname Admin
+          --lastname User
+          --role Admin
+          --email admin@example.com;
+      fi
+      "
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./src:/opt/airflow/project/src
+      - ./data:/opt/airflow/project/data
+      - airflow_logs:/opt/airflow/logs
+
+  airflow-webserver:
+    image: apache/airflow:2.10.5
+    container_name: credit-scoring-airflow-webserver
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      AIRFLOW__WEBSERVER__SECRET_KEY: dev-airflow-secret
+      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.session,airflow.api.auth.backend.basic_auth
+      PYTHONPATH: /opt/airflow/project/src
+      _PIP_ADDITIONAL_REQUIREMENTS: pandas==2.2.3 numpy==2.2.2 scikit-learn==1.6.1
+    command: webserver
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./src:/opt/airflow/project/src
+      - ./data:/opt/airflow/project/data
+      - airflow_logs:/opt/airflow/logs
+    restart: unless-stopped
+
+  airflow-scheduler:
+    image: apache/airflow:2.10.5
+    container_name: credit-scoring-airflow-scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      AIRFLOW__WEBSERVER__SECRET_KEY: dev-airflow-secret
+      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.session,airflow.api.auth.backend.basic_auth
+      PYTHONPATH: /opt/airflow/project/src
+      _PIP_ADDITIONAL_REQUIREMENTS: pandas==2.2.3 numpy==2.2.2 scikit-learn==1.6.1
+    command: scheduler
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./src:/opt/airflow/project/src
+      - ./data:/opt/airflow/project/data
+      - airflow_logs:/opt/airflow/logs
+    restart: unless-stopped
+
   mlflow:
     image: ghcr.io/mlflow/mlflow:latest
     container_name: credit-scoring-mlflow
@@ -21,3 +131,5 @@ services:
 
 volumes:
   mlflow_data:
+  postgres_data:
+  airflow_logs:

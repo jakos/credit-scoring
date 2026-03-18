@@ -100,8 +100,83 @@ To remove persisted MLflow data as well:
 docker compose down -v
 ```
 
+## Airflow DAGs
+
+Airflow DAGs available in this repository:
+
+- `dags/credit_scoring_training_dag.py` (`credit_scoring_training`): validates input data and runs training.
+- `dags/credit_scoring_data_quality_dag.py` (`credit_scoring_data_quality`): validates schema and missing-data ratio.
+- `dags/credit_scoring_retraining_dag.py` (`credit_scoring_retraining`): scheduled model retraining.
+
+### Optional environment variables
+
+- `CREDIT_SCORING_DATASET`: override dataset path (default: `data/raw/UCI_Credit_Card.csv`)
+- `CREDIT_SCORING_MAX_ITER`: override training iterations (default: `300`)
+
+### Local usage notes
+
+1. Copy the DAG into your Airflow `dags` folder (or point Airflow to this repository's `dags/` directory).
+2. Ensure your Airflow worker/scheduler has access to this repository source and data paths.
+3. Trigger `credit_scoring_training_example` from the Airflow UI.
+
+### Run Airflow with Docker Compose
+
+This repository includes a basic Airflow stack (`postgres`, `airflow-init`, `airflow-webserver`, `airflow-scheduler`) in `docker-compose.yml`.
+
+Before starting Airflow, create a local `.env` file and set credentials (minimum: `AIRFLOW_ADMIN_PASSWORD`):
+
+```bash
+cp .env.example .env
+```
+
+Then edit `.env` and set a strong password, for example:
+
+```env
+AIRFLOW_ADMIN_PASSWORD=use-a-strong-unique-password
+```
+
+1. Start Airflow:
+
+```bash
+docker compose up -d postgres airflow-init airflow-webserver airflow-scheduler
+```
+
+If you use Podman Compose:
+
+```bash
+podman compose up -d postgres airflow-init airflow-webserver airflow-scheduler
+```
+
+2. Open Airflow UI:
+
+Open http://127.0.0.1:8080 in your browser.
+
+3. Log in with credentials:
+
+- username: `admin`
+- password: `AIRFLOW_ADMIN_PASSWORD` from `.env`
+
+4. Enable and trigger DAGs:
+
+- `credit_scoring_data_quality`
+- `credit_scoring_training`
+- `credit_scoring_retraining`
+
+5. Stop Airflow:
+
+```bash
+docker compose down
+```
+
+With Podman Compose:
+
+```bash
+podman compose down
+```
+
 ## Project Structure
 
 - `src/credit_scoring/`: application package
+- `dags/`: Airflow DAGs
 - `tests/`: test suite
 - `pyproject.toml`: project metadata and tooling config
