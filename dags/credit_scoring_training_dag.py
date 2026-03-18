@@ -26,7 +26,7 @@ def _run_training() -> None:
     command = ["python", "-m", "credit_scoring.modeling.main", "--max-iter", str(max_iter)]
 
     # Use a plain Python module call so the same DAG works in local and containerized Airflow.
-    subprocess.run(command, check=True)
+    subprocess.run(command, check=True)  # noqa: S603
 
 
 with DAG(

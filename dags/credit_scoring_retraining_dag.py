@@ -45,7 +45,7 @@ def _run_retraining() -> None:
             ]
         )
 
-    subprocess.run(command, check=True)
+    subprocess.run(command, check=True)  # noqa: S603
 
 
 with DAG(
