@@ -6,8 +6,7 @@ This roadmap describes planned improvements for the credit-scoring project.
 
 Build a reproducible, testable, and deployable credit-scoring workflow that supports experiment tracking, model governance, and reliable inference.
 
-Legend: ✅ done, ⏳ in progress, ⬜ planned
-
+Legend: ✅ done, ⏳ in progress
 
 ## ✅ Phase 1 — Core ML Pipeline
 Goal:
@@ -28,30 +27,30 @@ Goal:
 
 Features:
 
-- ⬜ Airflow DAGs  
-- ⬜ Model registry  
-- ⬜ FastAPI scoring service  
+- Airflow DAGs  
+- Model registry  
+- FastAPI scoring service  
 
-## ⬜ Phase 3 — Monitoring & Observability
+## Phase 3 — Monitoring & Observability
 Goal:
 
 - Detect model/data issues early in production-like environments.
 
 Features:
 
-- ⬜ Prometheus metrics  
-- ⬜ Grafana dashboards  
-- ⬜ Drift detection DAG  
+- Prometheus metrics  
+- Grafana dashboards  
+- Drift detection DAG  
 
-## ⬜ Phase 4 — Feature Store Integration
+## Phase 4 — Feature Store Integration
 Goal:
 
 - Introduce reusable and consistent feature definitions for training and inference.
 
 Features:
 
-- ⬜ Feast offline store  
-- ⬜ Online store for real‑time features  
+- Feast offline store  
+- Online store for real‑time features  
 
 ## ⏳ Phase 5 — CI/CD
 Goal:
@@ -60,21 +59,21 @@ Goal:
 
 Features:
 
-- ⬜ GitHub Actions  
+- GitHub Actions  
 - ✅ Automated testing  
-- ⬜ Automated model promotion  
+- Automated model promotion  
 
-## ⬜ Phase 6 — Kubernetes Deployment
+## Phase 6 — Kubernetes Deployment
 Goal:
 
 - Run inference and supporting services on a scalable Kubernetes platform.
 
 Features:
 
-- ⬜ k3d / kind cluster  
-- ⬜ API deployment  
-- ⬜ MLflow deployment  
-- ⬜ Monitoring stack deployment  
+- k3d / kind cluster  
+- API deployment  
+- MLflow deployment  
+- Monitoring stack deployment  
 
 Planned deliverables:
 
