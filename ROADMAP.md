@@ -15,10 +15,10 @@ Goal:
 
 Features:
 
-- ✅ EDA  
-- ✅ Preprocessing  
-- ✅ Baseline model  
-- ✅ MLflow tracking  
+- ✅ EDA
+- ✅ Preprocessing
+- ✅ Baseline model
+- ✅ MLflow tracking
 
 ## ⏳ Phase 2 — MLOps Foundations
 Goal:
@@ -27,9 +27,9 @@ Goal:
 
 Features:
 
-- Airflow DAGs  
-- Model registry  
-- FastAPI scoring service  
+- ✅ Airflow DAGs
+- Model registry
+- FastAPI scoring service
 
 ## Phase 3 — Monitoring & Observability
 Goal:
@@ -38,9 +38,9 @@ Goal:
 
 Features:
 
-- Prometheus metrics  
-- Grafana dashboards  
-- Drift detection DAG  
+- Prometheus metrics
+- Grafana dashboards
+- Drift detection DAG
 
 ## Phase 4 — Feature Store Integration
 Goal:
@@ -49,8 +49,8 @@ Goal:
 
 Features:
 
-- Feast offline store  
-- Online store for real‑time features  
+- Feast offline store
+- Online store for real‑time features
 
 ## ⏳ Phase 5 — CI/CD
 Goal:
@@ -59,9 +59,9 @@ Goal:
 
 Features:
 
-- GitHub Actions  
-- ✅ Automated testing  
-- Automated model promotion  
+- GitHub Actions
+- ✅ Automated testing
+- Automated model promotion
 
 ## Phase 6 — Kubernetes Deployment
 Goal:
@@ -70,10 +70,10 @@ Goal:
 
 Features:
 
-- k3d / kind cluster  
-- API deployment  
-- MLflow deployment  
-- Monitoring stack deployment  
+- k3d / kind cluster
+- API deployment
+- MLflow deployment
+- Monitoring stack deployment
 
 Planned deliverables:
 
