@@ -27,7 +27,7 @@ uv run pytest
 ## Git
 
 - base: main
-- branch: feature/<id>
+- branch: task/<id>
 - worktree: yes
 
 ## Finish
