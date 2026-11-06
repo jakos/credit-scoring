@@ -25,6 +25,7 @@ def test_pipeline_matches_original_algorithm() -> None:
         precision_score,
         recall_score,
         roc_auc_score,
+        roc_curve,
     )
     from sklearn.model_selection import train_test_split
     from sklearn.pipeline import Pipeline
@@ -82,7 +83,10 @@ def test_pipeline_matches_original_algorithm() -> None:
     )
     np.testing.assert_array_equal(actual.y_pred, reference.predict(x_test))
     np.testing.assert_allclose(actual.y_proba, reference.predict_proba(x_test)[:, 1])
+    fpr, tpr, _ = roc_curve(y_test, actual.y_proba)
     expected = {
+        "ks": float(np.max(np.abs(tpr - fpr))),
+        "gini": 2 * roc_auc_score(y_test, actual.y_proba) - 1,
         "accuracy": accuracy_score(y_test, reference.predict(x_test)),
         "precision": precision_score(y_test, reference.predict(x_test), zero_division=0),
         "recall": recall_score(y_test, reference.predict(x_test), zero_division=0),

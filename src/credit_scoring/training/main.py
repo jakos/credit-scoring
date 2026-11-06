@@ -2,6 +2,7 @@
 """Entrypoint for running model training and reporting metrics."""
 
 import argparse
+from pathlib import Path
 
 import pandas as pd
 
@@ -41,11 +42,22 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional MLflow run name.",
     )
+    parser.add_argument(
+        "--lifecycle",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Train both families and run gated registry promotion (requires tracking URI).",
+    )
+    parser.add_argument("--registered-model-name", default=None)
+    parser.add_argument("--promotion-policy-path", type=Path, default=None)
     args = parser.parse_args()
     overrides = {
         name: value
         for name, value in {
             "CREDIT_SCORING_MAX_ITER": args.max_iter,
+            "CREDIT_SCORING_REGISTRY_ENABLED": args.lifecycle,
+            "CREDIT_SCORING_REGISTERED_MODEL_NAME": args.registered_model_name,
+            "CREDIT_SCORING_PROMOTION_POLICY_PATH": args.promotion_policy_path,
             "CREDIT_SCORING_MLFLOW_TRACKING_URI": args.mlflow_tracking_uri,
             "CREDIT_SCORING_MLFLOW_EXPERIMENT": args.mlflow_experiment,
         }.items()
@@ -55,6 +67,9 @@ def parse_args() -> argparse.Namespace:
     args.max_iter = settings.max_iter or 1000
     args.mlflow_tracking_uri = settings.mlflow_tracking_uri
     args.mlflow_experiment = settings.mlflow_experiment
+    args.lifecycle = settings.registry_enabled
+    if args.lifecycle and not settings.mlflow_tracking_uri:
+        parser.error("Registry lifecycle requires a nonempty MLflow tracking URI")
     args.settings = settings
     return args
 
@@ -65,6 +80,32 @@ def main() -> None:
 
     settings = getattr(args, "settings", None) or Settings()
     logger = configure_logging(settings.log_level)
+    if getattr(args, "lifecycle", False):
+        from credit_scoring.data.loader import load_credit_data
+        from credit_scoring.registry.lifecycle import run_lifecycle
+        from credit_scoring.registry.mlflow_adapter import MLflowRegistry
+        from credit_scoring.registry.policy import load_policy
+
+        policy = load_policy(settings.promotion_policy_path)
+        if not settings.mlflow_tracking_uri:
+            raise ValueError("Registry lifecycle requires MLflow tracking")
+        registry = MLflowRegistry(
+            settings.mlflow_tracking_uri, settings.mlflow_experiment, settings.registered_model_name
+        )
+        decision = run_lifecycle(
+            load_credit_data(settings.dataset)
+            if settings.dataset is not None
+            else load_credit_data(),
+            registry,
+            policy,
+            max_iter=args.max_iter,
+        )
+        logger.info(
+            "lifecycle_completed",
+            extra={"fields": {"promoted": decision.approved, "reasons": decision.reasons}},
+        )
+        print(f"Lifecycle completed. Promoted: {decision.approved}")
+        return
     if settings.dataset is None:
         artifacts = train(max_iter=args.max_iter)
     else:

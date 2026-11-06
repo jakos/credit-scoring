@@ -1,0 +1,6 @@
+roc_auc_min_improvement = 0.005
+pr_auc_max_decrease = 0.01
+psi_ceiling = 0.10
+bootstrap_roc_auc_min = 0.70
+psi_bins = 10
+psi_smoothing = 0.000001

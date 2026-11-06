@@ -24,8 +24,9 @@ See [package layout](docs/adr/0001-package-layout.md) and
 - [x] CSV loading, numeric preprocessing, stratified split, logistic regression, and six metrics (`src/credit_scoring/`).
 - [x] Optional MLflow parameter/metric/model-artifact tracking (`src/credit_scoring/training/tracking.py`).
 - [x] Scheduled validation, training, and retraining (`dags/`); see [orchestration](docs/adr/0003-workflow-orchestration.md).
-- [ ] Model registry registration, versioning, and artifact lineage.
-- [ ] Validation gates, approval, promotion, rollback, and automated promotion.
+- [x] Model registry registration, exact version aliases, artifact lineage, and model cards (`src/credit_scoring/registry/`).
+- [x] Deterministic logistic regression/HistGradientBoosting comparison, KS/Gini/PSI, pure promotion gates, and automated challenger/champion promotion; see [registry decision](docs/adr/0004-model-registry-promotion.md).
+- [ ] Automated rollback and additional approval workflows.
 
 ## Scoring service
 

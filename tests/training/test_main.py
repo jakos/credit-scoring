@@ -243,3 +243,64 @@ def test_explicit_iterations_override_invalid_environment(monkeypatch) -> None:
     monkeypatch.setenv("CREDIT_SCORING_MAX_ITER", "invalid")
     monkeypatch.setattr(sys, "argv", ["prog", "--max-iter", "20"])
     assert modeling_main.parse_args().max_iter == 20
+
+
+def test_lifecycle_settings_and_tracking_requirement(monkeypatch) -> None:
+    import pytest
+
+    monkeypatch.setattr(sys, "argv", ["prog", "--lifecycle"])
+    with pytest.raises(SystemExit):
+        modeling_main.parse_args()
+    monkeypatch.setenv("CREDIT_SCORING_MLFLOW_TRACKING_URI", "http://localhost:5000")
+    monkeypatch.setenv("CREDIT_SCORING_REGISTRY_ENABLED", "true")
+    monkeypatch.setenv("CREDIT_SCORING_REGISTERED_MODEL_NAME", "environment")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["prog", "--registered-model-name", "flag", "--promotion-policy-path", "custom.toml"],
+    )
+    args = modeling_main.parse_args()
+    assert args.lifecycle
+    assert args.settings.registered_model_name == "flag"
+    assert str(args.settings.promotion_policy_path) == "custom.toml"
+    monkeypatch.setattr(sys, "argv", ["prog", "--no-lifecycle"])
+    assert not modeling_main.parse_args().lifecycle
+
+
+def test_cli_dispatches_shared_lifecycle(monkeypatch, capsys) -> None:
+    from pathlib import Path
+    from unittest.mock import Mock
+
+    import credit_scoring.data.loader as loader
+    import credit_scoring.registry.lifecycle as lifecycle
+    import credit_scoring.registry.mlflow_adapter as adapter
+    from credit_scoring.registry.promotion import Decision
+
+    monkeypatch.setenv("CREDIT_SCORING_DATASET", "fixture.csv")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "prog",
+            "--lifecycle",
+            "--mlflow-tracking-uri",
+            "http://localhost:5000",
+            "--registered-model-name",
+            "risk",
+            "--max-iter",
+            "40",
+        ],
+    )
+    frame = object()
+    load = Mock(return_value=frame)
+    factory = Mock()
+    run = Mock(return_value=Decision(True, {}, ()))
+    monkeypatch.setattr(loader, "load_credit_data", load)
+    monkeypatch.setattr(adapter, "MLflowRegistry", factory)
+    monkeypatch.setattr(lifecycle, "run_lifecycle", run)
+    modeling_main.main()
+    load.assert_called_once_with(Path("fixture.csv"))
+    factory.assert_called_once_with("http://localhost:5000", "credit-scoring", "risk")
+    assert run.call_args.args[:2] == (frame, factory.return_value)
+    assert run.call_args.kwargs == {"max_iter": 40}
+    assert "Promoted: True" in capsys.readouterr().out

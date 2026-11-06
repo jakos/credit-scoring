@@ -31,6 +31,25 @@ class Settings(BaseSettings):
         default="credit-scoring", validation_alias="CREDIT_SCORING_MLFLOW_EXPERIMENT"
     )
 
+    registry_enabled: bool = Field(
+        default=False, validation_alias="CREDIT_SCORING_REGISTRY_ENABLED"
+    )
+    registered_model_name: str = Field(
+        default="credit-scoring",
+        min_length=1,
+        validation_alias="CREDIT_SCORING_REGISTERED_MODEL_NAME",
+    )
+    promotion_policy_path: Path | None = Field(
+        default=None, validation_alias="CREDIT_SCORING_PROMOTION_POLICY_PATH"
+    )
+
+    @field_validator("registered_model_name")
+    @classmethod
+    def validate_model_name(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Registered model name must not be blank")
+        return value
+
     @field_validator("log_level", mode="before")
     @classmethod
     def normalize_log_level(cls, value: str) -> str:

@@ -104,3 +104,16 @@ def test_no_implicit_dotenv(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     assert Settings().max_iter is None
     assert Settings().log_level == "INFO"
+
+
+def test_registry_environment_and_override(monkeypatch) -> None:
+    monkeypatch.setenv("CREDIT_SCORING_REGISTRY_ENABLED", "true")
+    monkeypatch.setenv("CREDIT_SCORING_REGISTERED_MODEL_NAME", "risk")
+    monkeypatch.setenv("CREDIT_SCORING_PROMOTION_POLICY_PATH", "custom.toml")
+    settings = Settings()
+    assert settings.registry_enabled
+    assert settings.registered_model_name == "risk"
+    assert settings.promotion_policy_path == Path("custom.toml")
+    assert not Settings(CREDIT_SCORING_REGISTRY_ENABLED=False).registry_enabled
+    with pytest.raises(ValidationError):
+        Settings(CREDIT_SCORING_REGISTERED_MODEL_NAME=" ")

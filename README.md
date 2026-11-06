@@ -2,7 +2,7 @@
 
 An open-source credit-risk ML platform for reproducible baseline training,
 evaluation, experiment tracking, and scheduled validation and retraining.
-Model registry promotion, online scoring, cloud deployment, and drift monitoring
+Gated model registry promotion is available; online scoring, cloud deployment, and drift monitoring
 are planned in the [roadmap](ROADMAP.md). The [architecture records](docs/adr/README.md)
 explain current package, tooling, and orchestration decisions.
 
@@ -16,22 +16,21 @@ flowchart LR
     subgraph current[Implemented]
         CSV[CSV dataset] --> Data[Data loading]
         Data --> Features[Numeric preprocessing and stratified split]
-        Features --> Train[Logistic regression training]
-        Train --> Eval[Six evaluation metrics]
+        Features --> Train[Logistic regression and optional HistGradientBoosting]
+        Train --> Eval[Classification, ranking, and stability metrics]
         CLI[Training CLI] --> Train
         Airflow[Airflow validation and scheduled training] --> CLI
         Train --> MLflow[Optional MLflow experiment tracking]
+        MLflow --> Registry[Model registry and gated promotion]
         Settings[Typed settings and JSON logging] --> CLI
         Settings --> Airflow
     end
     subgraph future[Planned]
-        Registry[Model registry and promotion]
         API[Scoring service]
         Cloud[Kubernetes and GCP]
         Pipelines[Kubeflow or Vertex pipelines]
         Monitor[Monitoring and drift]
     end
-    MLflow -.-> Registry
     Registry -.-> API
     API -.-> Cloud
     Cloud -.-> Monitor
@@ -83,7 +82,8 @@ uv sync --locked --group notebook
 | `src/credit_scoring/data/` | CSV loading and repository-relative default path |
 | `src/credit_scoring/features/` | Target selection, stratified splitting, numeric preprocessing |
 | `src/credit_scoring/training/` | Logistic regression, CLI coordination, optional tracking |
-| `src/credit_scoring/evaluation/` | Accuracy, precision, recall, F1, ROC AUC, average precision (`pr_auc`) |
+| `src/credit_scoring/evaluation/` | Classification metrics, ROC AUC, average precision (`pr_auc`), KS, Gini, PSI |
+| `src/credit_scoring/registry/` | Policy, pure gates, lifecycle, model cards, optional MLflow adapter |
 | `src/credit_scoring/config/` | Typed environment settings |
 | `src/credit_scoring/logging.py` | Standard-library JSON application logging |
 | `src/credit_scoring/modeling/` | Thin compatibility re-exports and legacy entry point |
@@ -99,7 +99,7 @@ continue to delegate to the focused packages.
 The supplied default dataset is `data/raw/UCI_Credit_Card.csv`. Training drops
 `ID`, uses a stratified split, imputes numeric features with medians, scales them,
 and fits baseline logistic regression. Existing tests preserve the split,
-preprocessing, model parameters, and six metrics.
+preprocessing, model parameters, and existing metrics. KS and Gini add reporting metrics.
 
 ```bash
 uv run --locked train-model --max-iter 300
@@ -109,8 +109,8 @@ uv run --locked python -m credit_scoring.training.main --help
 
 ## Optional MLflow
 
-Tracking records iterations, evaluation metrics, and the model artifact. It does
-not implement registry registration or promotion. Local file tracking works with
+Tracking-only mode records iterations, evaluation metrics, and the model artifact.
+Registry lifecycle is a separate opt-in mode described below. Local file tracking works with
 MLflow from the default modeling group:
 
 ```bash
@@ -127,6 +127,60 @@ uv run --locked train-model --max-iter 300 --enable-mlflow --mlflow-tracking-uri
 
 Compose persists tracking data in `mlflow_data`. Its existing MLflow image uses a
 floating tag; the local stack is not a locked production deployment.
+
+## Registry lifecycle
+
+Use a reachable MLflow registry backend with compatible artifact storage and a
+nonempty tracking URI. This command enables tracking and registry operations:
+
+```bash
+uv run --locked train-model --lifecycle --mlflow-tracking-uri http://127.0.0.1:5000 --registered-model-name credit-scoring
+```
+
+Ordinary training stays logistic regression; `--enable-mlflow` alone stays tracking-only.
+Lifecycle mode fits `logistic_regression` and `hist_gradient_boosting` on identical
+stratified train/test rows (seed 42, test fraction 0.2), with independent preprocessing
+fit exclusively on training rows. HistGradientBoosting uses 50 iterations, 15 maximum
+leaf nodes, seed 42, and no early stopping. Both logged artifacts include preprocessing.
+Both model runs are registered under the configured name. Select the challenger by
+highest held-out ROC AUC, then highest average precision (`pr_auc`), then lexicographically
+smallest algorithm name. `challenger` references that exact registered version.
+
+The default packaged [policy](src/credit_scoring/registry/promotion.toml) requires:
+
+- With a champion: challenger ROC AUC minus champion ROC AUC **>= 0.005**;
+  champion PR AUC minus challenger PR AUC **<= 0.01**; challenger PSI **< 0.10**.
+- Without a champion: challenger ROC AUC **>= 0.70**, challenger PSI **< 0.10**.
+- Required discrimination metrics must be present and finite. KS and Gini are reporting
+  metrics, with Gini = 2 * ROC AUC - 1 and KS the maximum empirical class-score CDF separation.
+
+Champion metrics are recomputed on the same current held-out rows and labels, using
+its complete stored pipeline. Historical metrics from a different split are not compared.
+PSI compares training and held-out default probabilities using 10 training-derived
+quantile bins. Internal quantile edges are deduplicated; infinite outer edges cover
+all valid [0, 1] probabilities. Add 0.000001 to every bin proportion and renormalize
+before summing `(observed - reference) * log(observed / reference)`. This handles
+empty bins. Constant reference scores retain one internal edge: identical constants
+give zero PSI; scores below that edge enter a separate bin, while values equal to
+or above it share a bin. Empty, nonfinite, or out-of-range probability inputs fail.
+
+Every workflow model run receives `model_card.md`: dataset fingerprint and target,
+feature names/types, split seed and sizes, estimator parameters, metrics, PSI method,
+policy, run/version lineage, limitations, and outcome. Cards contain aggregate metadata,
+not observations or credentials. Selected cards and run/version tags report rejection
+reasons or successful promotion. Rejection preserves `champion`; infrastructure,
+readiness, artifact, or incompatible champion prediction failures fail the command.
+Bootstrap is allowed when the registered model is missing (MLflow
+`RESOURCE_DOES_NOT_EXIST`) or its alias map has no `champion` entry. Other registered
+model lookup errors propagate.
+
+**Require a single promotion writer across CLI and both DAGs.** The workflow rechecks
+the expected champion before assigning `champion` and refuses an observed change.
+MLflow alias updates are not transactional compare-and-swap; this does not supply a
+lock or guarantee safety for simultaneous writers. Failed alias assignments never
+report successful promotion. Held-out data is reused for selection and promotion;
+independent validation remains future work. Passing gates establishes neither
+calibration, fairness, nor regulatory approval. See [ADR 0004](docs/adr/0004-model-registry-promotion.md).
 
 ## Optional Airflow
 
@@ -155,8 +209,10 @@ trigger the desired DAG:
 Workers need access to source, dependencies, and data. Compose mounts `src/`,
 `dags/`, and `data/`; a separate Airflow installation needs equivalent access.
 Training subprocesses invoke `python -m credit_scoring.training.main` with checked
-execution and inherit the task environment. Retraining enables MLflow when its
-tracking URI is nonempty. Offline tests cover DAG task behavior with stubs, not a
+execution and inherit the task environment. Retraining enables tracking-only MLflow when its
+tracking URI is nonempty. Both DAGs append `--lifecycle` when registry enablement is
+configured and inherit the same model name, policy override, tracking settings, and dataset.
+Validation still precedes training and subprocess failures propagate. Offline tests cover DAG task behavior with stubs, not a
 running scheduler. Kubeflow/Vertex pipelines remain planned.
 
 Stop the local stack while retaining its named data volumes:
@@ -179,7 +235,11 @@ uv run train-model
 
 Explicit CLI flags take precedence over environment values, followed by caller
 defaults. `--enable-mlflow` remains the CLI opt-in: a tracking URI alone does not enable
-it. `--mlflow-run-name` remains optional and has no environment alias. `--help` exits
+it in ordinary mode. Registry enablement implies tracking and requires a nonempty URI.
+`--lifecycle` / `--no-lifecycle` override environment enablement.
+`--registered-model-name` and `--promotion-policy-path` override their environment values;
+unset policy paths load the packaged TOML independently of the working directory.
+`--mlflow-run-name` remains optional and has no environment alias. `--help` exits
 before constructing settings, training, or contacting services.
 
 | Environment alias | Default | Meaning |
@@ -192,6 +252,9 @@ before constructing settings, training, or contacting services.
 | `CREDIT_SCORING_MAX_MISSING_RATIO` | `0.10` | Inclusive 0..1 data-quality threshold |
 | `CREDIT_SCORING_MLFLOW_TRACKING_URI` | unset | Optional tracking URI; retraining enables MLflow when set |
 | `CREDIT_SCORING_MLFLOW_EXPERIMENT` | `credit-scoring` | Experiment name; CLI override: `--mlflow-experiment` |
+| `CREDIT_SCORING_REGISTRY_ENABLED` | `false` | Enable lifecycle in CLI and both DAGs; requires tracking URI |
+| `CREDIT_SCORING_REGISTERED_MODEL_NAME` | `credit-scoring` | Shared registry model name |
+| `CREDIT_SCORING_PROMOTION_POLICY_PATH` | unset | Optional complete TOML policy override; relative to current working directory |
 
 The library `train` takes explicit arguments and does not read environment variables.
 Its optional keyword-only `dataset_path` selects input when `df` is absent; an explicit
@@ -207,7 +270,7 @@ The shared gate validates the package under Python 3.14.
 
 CLI status and metric text remain on stdout. Application logs are JSON lines on
 stderr with `timestamp` (UTC), `severity`, `logger`, and `event`. Training completion
-includes `sample_count` and all six `metrics`; successful tracking emits
+includes `sample_count` and evaluation `metrics`; successful tracking emits
 `mlflow_logging_completed`. DAG events report dataset/schema validation, missing
 ratio and threshold, or completed training/retraining with `max_iter`. Exception
 records include formatted `exception` information. Setup affects only the

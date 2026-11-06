@@ -20,7 +20,16 @@ def test_evaluate_predictions_returns_expected_metric_values() -> None:
 
     metrics = evaluate_predictions(y_true, y_pred, y_proba)
 
-    assert set(metrics) == {"accuracy", "precision", "recall", "f1", "roc_auc", "pr_auc"}
+    assert set(metrics) == {
+        "accuracy",
+        "precision",
+        "recall",
+        "f1",
+        "roc_auc",
+        "pr_auc",
+        "ks",
+        "gini",
+    }
     assert metrics["accuracy"] == pytest.approx(accuracy_score(y_true, y_pred))
     assert metrics["precision"] == pytest.approx(precision_score(y_true, y_pred, zero_division=0))
     assert metrics["recall"] == pytest.approx(recall_score(y_true, y_pred, zero_division=0))

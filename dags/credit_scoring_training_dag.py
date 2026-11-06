@@ -34,6 +34,9 @@ def _run_training() -> None:
     command = ["python", "-m", "credit_scoring.training.main", "--max-iter", str(max_iter)]
 
     # Use a plain Python module call so the same DAG works in local and containerized Airflow.
+    if settings.registry_enabled:
+        command.append("--lifecycle")
+
     subprocess.run(command, check=True)  # noqa: S603
     logger.info("training_task_completed", extra={"fields": {"max_iter": max_iter}})
 

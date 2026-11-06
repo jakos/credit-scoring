@@ -9,6 +9,7 @@ Planned capabilities are tracked in the [roadmap](../../ROADMAP.md).
 - [0001: Package layout](0001-package-layout.md)
 - [0002: Python tooling and shared gate](0002-python-tooling.md)
 - [0003: Workflow orchestration](0003-workflow-orchestration.md)
+- [0004: Model registry promotion](0004-model-registry-promotion.md)
 
 ## Record template
 

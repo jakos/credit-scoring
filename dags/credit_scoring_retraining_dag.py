@@ -53,6 +53,9 @@ def _run_retraining() -> None:
             ]
         )
 
+    if settings.registry_enabled:
+        command.append("--lifecycle")
+
     subprocess.run(command, check=True)  # noqa: S603
     logger.info("retraining_task_completed", extra={"fields": {"max_iter": max_iter}})
 
