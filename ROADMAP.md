@@ -30,9 +30,9 @@ See [package layout](docs/adr/0001-package-layout.md) and
 
 ## Scoring service
 
-- [ ] FastAPI prediction endpoint with validated schemas.
-- [ ] Governed model loading and consistent inference preprocessing.
-- [ ] Health/readiness endpoints and offline service tests.
+- [x] FastAPI single/batch prediction endpoints with validated schemas and configurable risk bands; see [serving guide](docs/serving.md).
+- [x] Fixed startup champion/local model snapshot and consistent inference preprocessing.
+- [x] Health/readiness endpoints, serving CLI, OpenAPI examples, and offline service tests.
 
 ## Containers
 

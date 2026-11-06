@@ -2,8 +2,8 @@
 
 An open-source credit-risk ML platform for reproducible baseline training,
 evaluation, experiment tracking, and scheduled validation and retraining.
-Gated model registry promotion is available; online scoring, cloud deployment, and drift monitoring
-are planned in the [roadmap](ROADMAP.md). The [architecture records](docs/adr/README.md)
+Gated model registry promotion and [online scoring](docs/serving.md) are available;
+cloud deployment and drift monitoring are planned in the [roadmap](ROADMAP.md). The [architecture records](docs/adr/README.md)
 explain current package, tooling, and orchestration decisions.
 
 ## Architecture
@@ -22,16 +22,15 @@ flowchart LR
         Airflow[Airflow validation and scheduled training] --> CLI
         Train --> MLflow[Optional MLflow experiment tracking]
         MLflow --> Registry[Model registry and gated promotion]
+        Registry --> API[FastAPI scoring service]
         Settings[Typed settings and JSON logging] --> CLI
         Settings --> Airflow
     end
     subgraph future[Planned]
-        API[Scoring service]
         Cloud[Kubernetes and GCP]
         Pipelines[Kubeflow or Vertex pipelines]
         Monitor[Monitoring and drift]
     end
-    Registry -.-> API
     API -.-> Cloud
     Cloud -.-> Monitor
     Train -.-> Pipelines
@@ -42,7 +41,7 @@ flowchart LR
 Install Python 3.14, [uv](https://docs.astral.sh/uv/), and
 [just](https://github.com/casey/just). `.python-version` selects Python 3.14;
 `uv.lock` records dependencies, including development tools. The default groups
-are dev and modeling; Airflow is not required for the shared gate.
+are dev, modeling, and serving; Airflow is not required for the shared gate.
 
 ```bash
 uv sync --locked
@@ -84,6 +83,7 @@ uv sync --locked --group notebook
 | `src/credit_scoring/training/` | Logistic regression, CLI coordination, optional tracking |
 | `src/credit_scoring/evaluation/` | Classification metrics, ROC AUC, average precision (`pr_auc`), KS, Gini, PSI |
 | `src/credit_scoring/registry/` | Policy, pure gates, lifecycle, model cards, optional MLflow adapter |
+| `src/credit_scoring/serving/` | Startup model snapshot, validated single/batch scoring, risk bands, health/readiness |
 | `src/credit_scoring/config/` | Typed environment settings |
 | `src/credit_scoring/logging.py` | Standard-library JSON application logging |
 | `src/credit_scoring/modeling/` | Thin compatibility re-exports and legacy entry point |
@@ -182,6 +182,26 @@ report successful promotion. Held-out data is reused for selection and promotion
 independent validation remains future work. Passing gates establishes neither
 calibration, fairness, nor regulatory approval. See [ADR 0004](docs/adr/0004-model-registry-promotion.md).
 
+## Online scoring
+
+The [serving guide](docs/serving.md) covers installation, local model preparation,
+registry and local startup, settings, complete request examples, and errors.
+The API serves the complete stored pipeline and class-1 default probability,
+with configurable low/medium/high bands. It loads the exact `champion` version
+once at startup, or a trusted local MLflow sklearn model directory.
+
+```bash
+uv run --locked serve --help
+uv run --locked python -m credit_scoring.serving.main --help
+```
+
+After configuring a model source, `serve` exposes `POST /v1/score`,
+`POST /v1/score/batch` (1–1000 applicants), `/healthz`, and `/readyz` on
+`127.0.0.1:8000` by default. `/docs` and `/openapi.json` describe the contract.
+Readiness remains 503 after a load failure; restart after source repair or a
+champion change. Risk bands partition model output and establish neither
+calibration nor lending eligibility.
+
 ## Optional Airflow
 
 The [Compose file](docker-compose.yml) supplies Postgres, initialization, webserver,
@@ -255,6 +275,12 @@ before constructing settings, training, or contacting services.
 | `CREDIT_SCORING_REGISTRY_ENABLED` | `false` | Enable lifecycle in CLI and both DAGs; requires tracking URI |
 | `CREDIT_SCORING_REGISTERED_MODEL_NAME` | `credit-scoring` | Shared registry model name |
 | `CREDIT_SCORING_PROMOTION_POLICY_PATH` | unset | Optional complete TOML policy override; relative to current working directory |
+| `CREDIT_SCORING_SERVING_MODEL_SOURCE` | `registry` | `registry` requires tracking URI; `local` requires a model directory |
+| `CREDIT_SCORING_SERVING_MODEL_PATH` | unset | Trusted MLflow sklearn directory for local serving |
+| `CREDIT_SCORING_SERVING_HOST` | `127.0.0.1` | Bind host; `--host` overrides environment |
+| `CREDIT_SCORING_SERVING_PORT` | `8000` | Port 1–65535; `--port` overrides environment |
+| `CREDIT_SCORING_RISK_MEDIUM_THRESHOLD` | `0.20` | Inclusive medium lower boundary; finite, strictly above 0 and below high |
+| `CREDIT_SCORING_RISK_HIGH_THRESHOLD` | `0.50` | Inclusive high lower boundary; finite, strictly above medium and below 1 |
 
 The library `train` takes explicit arguments and does not read environment variables.
 Its optional keyword-only `dataset_path` selects input when `df` is absent; an explicit

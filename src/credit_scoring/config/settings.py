@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, PositiveInt, field_validator
+from pydantic import Field, PositiveInt, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -54,3 +54,45 @@ class Settings(BaseSettings):
     @classmethod
     def normalize_log_level(cls, value: str) -> str:
         return value.upper()
+
+
+class ServingSettings(Settings):
+    """Serving configuration; source requirements do not affect training commands."""
+
+    serving_model_source: Literal["registry", "local"] = Field(
+        default="registry", validation_alias="CREDIT_SCORING_SERVING_MODEL_SOURCE"
+    )
+    serving_model_path: Path | None = Field(
+        default=None, validation_alias="CREDIT_SCORING_SERVING_MODEL_PATH"
+    )
+    serving_host: str = Field(
+        default="127.0.0.1", min_length=1, validation_alias="CREDIT_SCORING_SERVING_HOST"
+    )
+    serving_port: int = Field(
+        default=8000, ge=1, le=65535, validation_alias="CREDIT_SCORING_SERVING_PORT"
+    )
+    risk_medium_threshold: float = Field(
+        default=0.20,
+        gt=0,
+        lt=1,
+        allow_inf_nan=False,
+        validation_alias="CREDIT_SCORING_RISK_MEDIUM_THRESHOLD",
+    )
+    risk_high_threshold: float = Field(
+        default=0.50,
+        gt=0,
+        lt=1,
+        allow_inf_nan=False,
+        validation_alias="CREDIT_SCORING_RISK_HIGH_THRESHOLD",
+    )
+
+    @model_validator(mode="after")
+    def validate_serving(self) -> ServingSettings:
+        if self.risk_medium_threshold >= self.risk_high_threshold:
+            raise ValueError("Medium threshold must be below high threshold")
+        if self.serving_model_source == "local":
+            if self.serving_model_path is None or not self.serving_model_path.is_dir():
+                raise ValueError("Local serving requires an existing model directory")
+        elif not self.mlflow_tracking_uri or not self.mlflow_tracking_uri.strip():
+            raise ValueError("Registry serving requires a nonempty tracking URI")
+        return self

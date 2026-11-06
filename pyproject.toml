@@ -15,15 +15,22 @@ dependencies = ["pydantic-settings==2.12.0"]
 
 [project.scripts]
 train-model = "credit_scoring.training.main:main"
+serve = "credit_scoring.serving.main:main"
 
 [dependency-groups]
 dev = [
+  "httpx>=0.28.1",
   "mypy>=2.4.1",
   "pandas-stubs>=2.3,<2.4",
   "prek>=0.5",
   "pytest>=9",
   "pytest-cov>=7.0.0",
   "ruff>=0.16",
+]
+serving = [
+  "fastapi>=0.121",
+  "pydantic>=2.12",
+  "uvicorn>=0.38",
 ]
 modeling = [
   "mlflow>=2.16",
@@ -41,7 +48,7 @@ notebook = [
 ]
 
 [tool.uv]
-default-groups = ["dev", "modeling"]
+default-groups = ["dev", "modeling", "serving"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/credit_scoring"]
