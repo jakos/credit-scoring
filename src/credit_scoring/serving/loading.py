@@ -11,6 +11,7 @@ from credit_scoring.config.settings import ServingSettings
 from credit_scoring.registry.contracts import Registry
 from credit_scoring.registry.mlflow_adapter import MLflowRegistry
 from credit_scoring.serving.contracts import FeatureContract, ModelSnapshot
+from credit_scoring.serving.explanations import build_explanation
 
 
 class ModelContractError(ValueError):
@@ -60,8 +61,15 @@ def validate_pipeline(pipeline: Any) -> ModelSnapshot:
     indexes = np.flatnonzero(classes == 1)
     if len(indexes) != 1 or classes[0] == classes[1]:
         raise ModelContractError("Binary classes must include default label 1 exactly once")
+    try:
+        explainer = build_explanation(pipeline, names, int(indexes[0]))
+    except Exception:
+        raise ModelContractError("Unsupported explanation contract") from None
     return ModelSnapshot(
-        pipeline, FeatureContract(names, _nullable_features(pipeline, names)), int(indexes[0])
+        pipeline,
+        FeatureContract(names, _nullable_features(pipeline, names)),
+        int(indexes[0]),
+        explainer,
     )
 
 

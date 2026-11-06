@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, PositiveInt, field_validator, model_validator
+from pydantic import Field, PositiveInt, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -58,6 +58,19 @@ class Settings(BaseSettings):
 
 class ServingSettings(Settings):
     """Serving configuration; source requirements do not affect training commands."""
+
+    model_config = SettingsConfigDict(env_file=None, hide_input_in_errors=True)
+
+    serving_api_key: SecretStr | None = Field(
+        default=None, validation_alias="CREDIT_SCORING_SERVING_API_KEY", repr=False
+    )
+
+    @field_validator("serving_api_key")
+    @classmethod
+    def validate_api_key(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and not value.get_secret_value().strip():
+            raise ValueError("API key must not be blank")
+        return value
 
     serving_model_source: Literal["registry", "local"] = Field(
         default="registry", validation_alias="CREDIT_SCORING_SERVING_MODEL_SOURCE"

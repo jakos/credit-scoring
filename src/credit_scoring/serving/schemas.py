@@ -49,12 +49,44 @@ class BatchRequest(Envelope):
     applicants: list[Applicant] = Field(min_length=1, max_length=1000)
 
 
+class FeatureContribution(Envelope):
+    feature: str
+    contribution: float = Field(allow_inf_nan=False)
+
+
+class Explanation(Envelope):
+    model_config = ConfigDict(extra="forbid", revalidate_instances="always")
+
+    method: Literal["linear_log_odds"]
+    baseline_log_odds: float = Field(allow_inf_nan=False)
+    top_features: list[FeatureContribution] = Field(min_length=1, max_length=5)
+    remaining_contribution: float = Field(allow_inf_nan=False)
+
+
+# Illustrative response for a one-feature supported model.
+SCORE_EXAMPLE: dict[str, Any] = {
+    "probability_of_default": 0.5,
+    "risk_band": "high",
+    "explanation": {
+        "method": "linear_log_odds",
+        "baseline_log_odds": -0.2,
+        "top_features": [{"feature": "AGE", "contribution": 0.2}],
+        "remaining_contribution": 0.0,
+    },
+}
+
+
 class ScoreResponse(Envelope):
+    model_config = ConfigDict(extra="forbid", json_schema_extra={"examples": [SCORE_EXAMPLE]})
     probability_of_default: float = Field(ge=0, le=1, allow_inf_nan=False)
     risk_band: Literal["low", "medium", "high"]
+    explanation: Explanation
 
 
 class BatchResponse(Envelope):
+    model_config = ConfigDict(
+        extra="forbid", json_schema_extra={"examples": [{"scores": [SCORE_EXAMPLE]}]}
+    )
     scores: list[ScoreResponse]
 
 

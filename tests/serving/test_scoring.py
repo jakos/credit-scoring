@@ -4,8 +4,12 @@ from unittest.mock import Mock
 import numpy as np
 import pytest
 
-from credit_scoring.serving.contracts import FeatureContract, ModelSnapshot
-from credit_scoring.serving.loading import validate_pipeline
+from credit_scoring.serving.contracts import (
+    Explanation,
+    FeatureContract,
+    FeatureContribution,
+    ModelSnapshot,
+)
 from credit_scoring.serving.schemas import APPLICANT_EXAMPLE
 from credit_scoring.serving.scoring import FeatureValidationError, PredictionError, Scorer
 
@@ -15,7 +19,11 @@ def test_real_probabilities_order_and_vectorization(snapshot: ModelSnapshot) -> 
     second = {**first, "AGE": 70, "LIMIT_BAL": None}
     shuffled = dict(reversed(list(first.items())))
     predictor = Mock(wraps=snapshot.predictor)
-    scorer = Scorer(ModelSnapshot(predictor, snapshot.features, snapshot.default_column), 0.2, 0.5)
+    scorer = Scorer(
+        ModelSnapshot(predictor, snapshot.features, snapshot.default_column, snapshot.explainer),
+        0.2,
+        0.5,
+    )
     results = scorer.score([first, second], batch=True)
     predictor.predict_proba.assert_called_once()
     frame = predictor.predict_proba.call_args.args[0]
@@ -45,7 +53,19 @@ def test_threshold_boundaries_and_reversed_class_column(medium: float, high: flo
             return_value=np.column_stack([probabilities, 1 - np.array(probabilities)])
         ),
     )
-    scorer = Scorer(validate_pipeline(predictor), medium, high)
+    explanation = Mock()
+    explanation.explain.side_effect = lambda frame: [
+        Explanation(
+            method="linear_log_odds",
+            baseline_log_odds=0,
+            top_features=[FeatureContribution(feature="AGE", contribution=0)],
+            remaining_contribution=0,
+        )
+        for _ in range(len(frame))
+    ]
+    scorer = Scorer(
+        ModelSnapshot(predictor, FeatureContract(("AGE",)), 0, explanation), medium, high
+    )
     results = scorer.score([{"AGE": 35}] * len(probabilities), batch=True)
     assert [r.probability_of_default for r in results] == probabilities
     assert [r.risk_band for r in results] == [

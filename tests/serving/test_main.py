@@ -46,7 +46,7 @@ def test_host_port_precedence_and_uvicorn_invocation(monkeypatch: pytest.MonkeyP
     main.main()
     settings = factory.call_args.args[0]
     assert (settings.serving_host, settings.serving_port) == ("127.0.0.2", 9001)
-    server.assert_called_once_with(app, host="127.0.0.2", port=9001)
+    server.assert_called_once_with(app, host="127.0.0.2", port=9001, access_log=False)
 
 
 def test_invalid_configuration_error_is_sanitized(

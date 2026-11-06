@@ -40,7 +40,12 @@ def parse_args(argv: Sequence[str] | None = None) -> ServingSettings:
 
 def main() -> None:
     settings = parse_args()
-    uvicorn.run(create_app(settings), host=settings.serving_host, port=settings.serving_port)
+    uvicorn.run(
+        create_app(settings),
+        host=settings.serving_host,
+        port=settings.serving_port,
+        access_log=False,
+    )
 
 
 if __name__ == "__main__":

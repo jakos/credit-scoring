@@ -49,3 +49,25 @@ def test_sources_and_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
 def test_invalid_serving_settings(overrides: dict[str, object]) -> None:
     with pytest.raises(ValidationError):
         ServingSettings(**{"CREDIT_SCORING_MLFLOW_TRACKING_URI": "http://registry", **overrides})
+
+
+def test_api_key_defaults_precedence_and_redaction(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CREDIT_SCORING_MLFLOW_TRACKING_URI", "http://registry")
+    monkeypatch.delenv("CREDIT_SCORING_SERVING_API_KEY", raising=False)
+    assert ServingSettings().serving_api_key is None
+    monkeypatch.setenv("CREDIT_SCORING_SERVING_API_KEY", "environment-sentinel")
+    settings = ServingSettings(CREDIT_SCORING_SERVING_API_KEY="explicit-sentinel")
+    assert settings.serving_api_key.get_secret_value() == "explicit-sentinel"
+    assert "sentinel" not in repr(settings)
+    assert "sentinel" not in settings.model_dump_json()
+    with pytest.raises(ValidationError) as caught:
+        ServingSettings(CREDIT_SCORING_SERVING_PORT=0)
+    assert "environment-sentinel" not in str(caught.value)
+
+
+@pytest.mark.parametrize("key", ["", " ", "\t\n"])
+def test_blank_api_key_is_invalid(key: str) -> None:
+    with pytest.raises(ValidationError, match="API key must not be blank"):
+        ServingSettings(
+            CREDIT_SCORING_MLFLOW_TRACKING_URI="http://registry", CREDIT_SCORING_SERVING_API_KEY=key
+        )

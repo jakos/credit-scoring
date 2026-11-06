@@ -45,20 +45,27 @@ def create_router() -> APIRouter:
 
     @router.post("/v1/score", response_model=ScoreResponse, responses=errors)
     def score(
-        applicant: Applicant, scorer: Annotated[Scorer, Depends(get_scorer)]
+        applicant: Applicant, request: Request, scorer: Annotated[Scorer, Depends(get_scorer)]
     ) -> ScoreResponse:
         result = scorer.score([applicant.features])[0]
-        return ScoreResponse.model_validate(result, from_attributes=True)
+        response = ScoreResponse.model_validate(result, from_attributes=True)
+        request.state.score_probabilities = [response.probability_of_default]
+        return response
 
     @router.post("/v1/score/batch", response_model=BatchResponse, responses=errors)
     def score_batch(
-        batch: BatchRequest, scorer: Annotated[Scorer, Depends(get_scorer)]
+        batch: BatchRequest, request: Request, scorer: Annotated[Scorer, Depends(get_scorer)]
     ) -> BatchResponse:
         results = scorer.score([applicant.features for applicant in batch.applicants], batch=True)
-        return BatchResponse(
+        response = BatchResponse(
             scores=[
                 ScoreResponse.model_validate(result, from_attributes=True) for result in results
             ]
         )
+
+        request.state.score_probabilities = [
+            score.probability_of_default for score in response.scores
+        ]
+        return response
 
     return router

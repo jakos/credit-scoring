@@ -39,3 +39,28 @@ def test_example_and_maximum_batch() -> None:
         len(BatchRequest.model_validate({"applicants": [APPLICANT_EXAMPLE] * 1000}).applicants)
         == 1000
     )
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+@pytest.mark.parametrize("field", ["baseline_log_odds", "remaining_contribution", "contribution"])
+def test_explanation_numbers_are_finite(field: str, value: float) -> None:
+    from copy import deepcopy
+
+    from credit_scoring.serving.schemas import SCORE_EXAMPLE, ScoreResponse
+
+    response = deepcopy(SCORE_EXAMPLE)
+    explanation = response["explanation"]
+    if field == "contribution":
+        explanation["top_features"][0][field] = value
+    else:
+        explanation[field] = value
+    with pytest.raises(ValidationError):
+        ScoreResponse.model_validate(response)
+
+
+def test_explanation_required_and_openapi_example() -> None:
+    from credit_scoring.serving.schemas import SCORE_EXAMPLE, ScoreResponse
+
+    assert ScoreResponse.model_validate(SCORE_EXAMPLE).explanation.method == "linear_log_odds"
+    with pytest.raises(ValidationError):
+        ScoreResponse.model_validate({"probability_of_default": 0.5, "risk_band": "high"})

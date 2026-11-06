@@ -19,10 +19,29 @@ class FeatureContract:
 
 
 @dataclass(frozen=True)
+class FeatureContribution:
+    feature: str
+    contribution: float
+
+
+@dataclass(frozen=True)
+class Explanation:
+    method: str
+    baseline_log_odds: float
+    top_features: list[FeatureContribution]
+    remaining_contribution: float
+
+
+class Explainer(Protocol):
+    def explain(self, frame: pd.DataFrame) -> list[Explanation]: ...
+
+
+@dataclass(frozen=True)
 class ModelSnapshot:
     predictor: Predictor
     features: FeatureContract
     default_column: int
+    explainer: Explainer | None = None
 
 
 class Loader(Protocol):

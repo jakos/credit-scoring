@@ -8,7 +8,7 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 
-from credit_scoring.serving.contracts import ModelSnapshot
+from credit_scoring.serving.contracts import Explanation, ModelSnapshot
 
 
 @dataclass(frozen=True)
@@ -22,6 +22,7 @@ class ValidationIssue:
 class Score:
     probability_of_default: float
     risk_band: Literal["low", "medium", "high"]
+    explanation: Explanation
 
 
 class FeatureValidationError(ValueError):
@@ -104,12 +105,34 @@ class Scorer:
             if not np.isfinite(output).all() or ((output < 0) | (output > 1)).any():
                 raise PredictionError("Invalid probability values")
             probabilities = output[:, self.snapshot.default_column]
+            if self.snapshot.explainer is None:
+                raise PredictionError("Missing explanation component")
+            explanations = self.snapshot.explainer.explain(frame)
+            for explanation in explanations:
+                _validate_explanation(explanation, contract.names)
+            if len(explanations) != len(applicants):
+                raise PredictionError("Invalid explanation count")
             return [
                 Score(
                     probability_of_default=float(p),
+                    explanation=explanation,
                     risk_band=("low" if p < self.medium else "medium" if p < self.high else "high"),
                 )
-                for p in probabilities
+                for p, explanation in zip(probabilities, explanations, strict=True)
             ]
         except Exception:
             raise PredictionError("Model prediction failed") from None
+
+
+def _validate_explanation(explanation: Explanation, names: tuple[str, ...]) -> None:
+    features = explanation.top_features
+    if (
+        explanation.method != "linear_log_odds"
+        or len(features) != min(5, len(names))
+        or len({f.feature for f in features}) != len(features)
+        or any(f.feature not in names or not math.isfinite(f.contribution) for f in features)
+        or not math.isfinite(explanation.baseline_log_odds)
+        or not math.isfinite(explanation.remaining_contribution)
+        or features != sorted(features, key=lambda f: (-abs(f.contribution), f.feature))
+    ):
+        raise PredictionError("Invalid explanation output")

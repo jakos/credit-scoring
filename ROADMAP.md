@@ -33,6 +33,9 @@ See [package layout](docs/adr/0001-package-layout.md) and
 - [x] FastAPI single/batch prediction endpoints with validated schemas and configurable risk bands; see [serving guide](docs/serving.md).
 - [x] Fixed startup champion/local model snapshot and consistent inference preprocessing.
 - [x] Health/readiness endpoints, serving CLI, OpenAPI examples, and offline service tests.
+- [x] Native logistic log-odds explanations with deterministic top-five features and residuals.
+- [x] Optional API-key authentication, request ids, and JSON access logs.
+- [x] Process-local Prometheus request, latency, and successful-score metrics.
 
 ## Containers
 
@@ -75,7 +78,8 @@ extensions described in [ADR 0003](docs/adr/0003-workflow-orchestration.md).
 
 ## Monitoring and drift
 
-- [ ] Prometheus metrics and Grafana dashboards.
+- [x] Scoring API Prometheus metrics; see [serving guide](docs/serving.md).
+- [ ] Grafana dashboards.
 - [ ] Data/prediction drift checks, alerting, and a drift workflow.
 - [ ] Model quality monitoring and governed retraining triggers.
 

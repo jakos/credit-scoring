@@ -187,8 +187,11 @@ calibration, fairness, nor regulatory approval. See [ADR 0004](docs/adr/0004-mod
 The [serving guide](docs/serving.md) covers installation, local model preparation,
 registry and local startup, settings, complete request examples, and errors.
 The API serves the complete stored pipeline and class-1 default probability,
-with configurable low/medium/high bands. It loads the exact `champion` version
-once at startup, or a trusted local MLflow sklearn model directory.
+with configurable low/medium/high bands and native logistic log-odds explanations.
+The serving guide also covers optional `CREDIT_SCORING_SERVING_API_KEY` authentication,
+public process-local Prometheus `/metrics`, request ids, and structured access logs.
+The service loads the exact `champion` version once at startup, or a trusted local
+MLflow sklearn model directory.
 
 ```bash
 uv run --locked serve --help

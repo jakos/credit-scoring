@@ -93,8 +93,7 @@ def test_incompatible_metadata(metadata: dict[str, object]) -> None:
         validate_pipeline(model)
 
 
-def test_reverse_classes_and_no_imputer() -> None:
+def test_unsupported_model_without_explanation() -> None:
     model = SimpleNamespace(feature_names_in_=["AGE"], classes_=[1, 0], predict_proba=Mock())
-    snapshot = validate_pipeline(model)
-    assert snapshot.default_column == 0
-    assert not snapshot.features.nullable
+    with pytest.raises(ModelContractError, match="explanation"):
+        validate_pipeline(model)
