@@ -26,3 +26,6 @@ mlflow-data/
 
 # Environment files
 .env
+
+# task-flow workspace (local only, never committed)
+.work/
