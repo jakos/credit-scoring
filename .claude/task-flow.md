@@ -23,6 +23,7 @@ uv run pytest
 - Never commit secrets, keys or real credentials; configuration comes from environment variables with `.env.example` documenting them.
 - Docs and code describe the project in its own terms.
 - Every task that adds a capability updates README.md and ROADMAP.md accordingly.
+- Containers are engine-agnostic: Podman is the primary local engine (rootless by default; `podman compose` via podman-compose) and Docker keeps working. Scripts and recipes take the engine from `CONTAINER_ENGINE` (default `podman`) and never hard-code `docker`; compose files use only features podman-compose supports; images are built with `--format docker` so `HEALTHCHECK` is kept, and run rootless. Images reach kind through the local registry or `kind load image-archive`, never `kind load docker-image`.
 
 ## Git
 
