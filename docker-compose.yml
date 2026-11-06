@@ -30,7 +30,7 @@ services:
       AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.session,airflow.api.auth.backend.basic_auth
       AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
       PYTHONPATH: /opt/airflow/project/src
-      _PIP_ADDITIONAL_REQUIREMENTS: pandas==2.2.3 numpy==2.2.2 scikit-learn==1.6.1
+      _PIP_ADDITIONAL_REQUIREMENTS: pandas==2.2.3 numpy==2.2.2 scikit-learn==1.6.1 pydantic-settings==2.12.0
     command: >
       bash -c "
       set -euo pipefail;
@@ -73,7 +73,7 @@ services:
       AIRFLOW__WEBSERVER__SECRET_KEY: dev-airflow-secret
       AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.session,airflow.api.auth.backend.basic_auth
       PYTHONPATH: /opt/airflow/project/src
-      _PIP_ADDITIONAL_REQUIREMENTS: pandas==2.2.3 numpy==2.2.2 scikit-learn==1.6.1
+      _PIP_ADDITIONAL_REQUIREMENTS: pandas==2.2.3 numpy==2.2.2 scikit-learn==1.6.1 pydantic-settings==2.12.0
     command: webserver
     ports:
       - "8080:8080"
@@ -100,7 +100,7 @@ services:
       AIRFLOW__WEBSERVER__SECRET_KEY: dev-airflow-secret
       AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.session,airflow.api.auth.backend.basic_auth
       PYTHONPATH: /opt/airflow/project/src
-      _PIP_ADDITIONAL_REQUIREMENTS: pandas==2.2.3 numpy==2.2.2 scikit-learn==1.6.1
+      _PIP_ADDITIONAL_REQUIREMENTS: pandas==2.2.3 numpy==2.2.2 scikit-learn==1.6.1 pydantic-settings==2.12.0
     command: scheduler
     volumes:
       - ./dags:/opt/airflow/dags

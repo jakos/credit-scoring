@@ -19,6 +19,8 @@ Features:
 - ✅ Preprocessing
 - ✅ Baseline model
 - ✅ MLflow tracking
+- ✅ Focused data, features, training, and evaluation packages with legacy import compatibility
+- ✅ Regression coverage preserving the split, preprocessing, logistic regression, and six metrics
 
 ## ⏳ Phase 2 — MLOps Foundations
 Goal:
@@ -28,6 +30,9 @@ Goal:
 Features:
 
 - ✅ Airflow DAGs
+- ✅ Typed environment settings loaded at CLI/task execution time
+- ✅ Dataset overrides applied to actual training input, with caller-specific iteration defaults
+- ✅ Structured JSON application logs shared by CLI and Airflow tasks
 - Model registry
 - FastAPI scoring service
 

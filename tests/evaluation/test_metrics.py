@@ -10,7 +10,7 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
-from credit_scoring.modeling.evaluate import evaluate_predictions
+from credit_scoring.evaluation.metrics import evaluate_predictions
 
 
 def test_evaluate_predictions_returns_expected_metric_values() -> None:

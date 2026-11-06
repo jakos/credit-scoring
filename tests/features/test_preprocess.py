@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from credit_scoring.modeling.preprocess import (
+from credit_scoring.features.preprocess import (
     TARGET_COLUMN,
     build_preprocessor,
     split_features_target,
