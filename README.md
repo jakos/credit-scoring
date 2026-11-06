@@ -8,16 +8,33 @@ See the project roadmap: [ROADMAP.md](ROADMAP.md)
 
 ## Quick Start
 
+Install Python 3.14, [uv](https://docs.astral.sh/uv/), and
+[just](https://github.com/casey/just) before starting.
+The `.python-version` file pins Python to 3.14. The committed `uv.lock` keeps
+dependency and tool versions reproducible; plain `uv sync` installs both the dev
+and modeling groups needed for the offline test suite.
+
 ```bash
-uv sync --group dev
-py -3.14 -m uv run pre-commit install
-uv run pytest
+uv sync
+uv run prek install
+just check
 ```
+
+`just check` runs formatting checks, lint, and tests in order using the locked
+environment. Installing prek enables automatic whitespace/configuration checks
+and Ruff fixes/formatting before commits, plus automatic tests before pushes.
+Ruff and prek are managed in the dev group and locked with the project dependencies.
 
 Run hooks manually on all files:
 
 ```bash
-py -3.14 -m uv run pre-commit run --all-files
+uv run prek run --all-files
+```
+
+Run the pre-push tests manually:
+
+```bash
+uv run --locked prek run --all-files --hook-stage pre-push
 ```
 
 ## Run training

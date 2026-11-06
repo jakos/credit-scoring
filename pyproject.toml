@@ -18,10 +18,10 @@ train-model = "credit_scoring.modeling.main:main"
 
 [dependency-groups]
 dev = [
-  "pre-commit>=4.0",
-  "pytest>=8.0",
-  "pytest-cov>=6.0",
-  "ruff>=0.7.0"
+  "prek>=0.5",
+  "pytest>=9",
+  "pytest-cov>=7.0.0",
+  "ruff>=0.16"
 ]
 modeling = [
   "mlflow>=2.16",
@@ -38,6 +38,9 @@ notebook = [
   "seaborn>=0.13"
 ]
 
+[tool.uv]
+default-groups = ["dev", "modeling"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/credit_scoring"]
 
@@ -51,10 +54,9 @@ addopts = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py314"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "RET", "RSE", "S", "T10", "T20", "UP", "RUF100"]
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF", "S", "T20", "RET", "RSE", "T10"]
 ignore = ["E501", "RET503"]
 
 [tool.ruff.lint.per-file-ignores]

@@ -61,6 +61,7 @@ Features:
 
 - GitHub Actions
 - ✅ Automated testing
+- ✅ Python 3.14 tooling baseline: locked uv tools, prek commit/push hooks, and `just check`
 - Automated model promotion
 
 ## Phase 6 — Kubernetes Deployment
