@@ -1,9 +1,19 @@
 # task-flow model routing for this repository (overrides ~/.claude/task-flow/models.toml key by key).
-# Implementer: Claude subagent for now. task-flow 0.12.0 has no Codex CLI driver
-# (only HTTP drivers that need an API key); switch to a codex profile once one exists.
+# No secrets here. Codex runs through the CLI on its saved ChatGPT login (codex login).
+# Codex plans, designs the backlog and implements; Claude Opus reviews independently.
+
+[profiles.codex]
+driver = "cli"
+model = "gpt-6.1-sol"                # metadata only; the -m argument below picks the model
+billing = "subscription"
+command = ["codex", "exec", "--sandbox", "workspace-write", "--json", "--ephemeral", "-m", "gpt-6.1-sol", "-o", "{last_message_file}", "-"]
+read_only_command = ["codex", "exec", "--sandbox", "read-only", "--json", "--ephemeral", "-m", "gpt-6.1-sol", "-o", "{last_message_file}", "-"]
+prompt_via = "stdin"
+usage_format = "codex-jsonl"
+timeout_seconds = 1800
 
 [roles]
-planner = "claude:opus"
+planner = "codex"
+backlog = "codex"
+implementer = "codex"
 reviewer = "claude:opus"
-backlog = "claude:opus"
-implementer = "claude:sonnet"
