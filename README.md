@@ -1,204 +1,165 @@
 # Credit Scoring
 
-A credit-risk ML platform with reproducible baseline training, evaluation, optional
-MLflow tracking, and scheduled Airflow data-quality and retraining workflows.
-Serving, model registry integration, and production monitoring remain future work.
+An open-source credit-risk ML platform for reproducible baseline training,
+evaluation, experiment tracking, and scheduled validation and retraining.
+Model registry promotion, online scoring, cloud deployment, and drift monitoring
+are planned in the [roadmap](ROADMAP.md). The [architecture records](docs/adr/README.md)
+explain current package, tooling, and orchestration decisions.
 
-## Roadmap
+## Architecture
 
-See the project roadmap: [ROADMAP.md](ROADMAP.md)
+Solid connections show implemented workflows. Dashed connections show planned
+extensions; the planned group contains no running platform components.
 
-## Quick Start
+```mermaid
+flowchart LR
+    subgraph current[Implemented]
+        CSV[CSV dataset] --> Data[Data loading]
+        Data --> Features[Numeric preprocessing and stratified split]
+        Features --> Train[Logistic regression training]
+        Train --> Eval[Six evaluation metrics]
+        CLI[Training CLI] --> Train
+        Airflow[Airflow validation and scheduled training] --> CLI
+        Train --> MLflow[Optional MLflow experiment tracking]
+        Settings[Typed settings and JSON logging] --> CLI
+        Settings --> Airflow
+    end
+    subgraph future[Planned]
+        Registry[Model registry and promotion]
+        API[Scoring service]
+        Cloud[Kubernetes and GCP]
+        Pipelines[Kubeflow or Vertex pipelines]
+        Monitor[Monitoring and drift]
+    end
+    MLflow -.-> Registry
+    Registry -.-> API
+    API -.-> Cloud
+    Cloud -.-> Monitor
+    Train -.-> Pipelines
+```
+
+## Development setup
 
 Install Python 3.14, [uv](https://docs.astral.sh/uv/), and
-[just](https://github.com/casey/just) before starting.
-The `.python-version` file pins Python to 3.14. The committed `uv.lock` keeps
-dependency and tool versions reproducible; plain `uv sync` installs both the dev
-and modeling groups needed for the offline test suite.
+[just](https://github.com/casey/just). `.python-version` selects Python 3.14;
+`uv.lock` records dependencies, including development tools. The default groups
+are dev and modeling; Airflow is not required for the shared gate.
 
 ```bash
-uv sync
+uv sync --locked
 uv run prek install
 just check
 ```
 
-`just check` runs formatting checks, lint, and tests in order using the locked
-environment. Installing prek enables automatic whitespace/configuration checks
-and Ruff fixes/formatting before commits, plus automatic tests before pushes.
-Ruff and prek are managed in the dev group and locked with the project dependencies.
+`just check` runs locked Ruff formatting checks, Ruff lint, mypy, and pytest in
+order and stops on failure. The Windows recipe uses PowerShell; Linux uses the
+standard just shell. CI runs this same gate on pushes and pull requests.
+Mypy covers the entire application package, including legacy wrappers, using
+pandas stubs and a scoped missing-import exception for scikit-learn. Tests and
+standalone DAGs remain outside the initial type-check target.
 
-Run hooks manually on all files:
+Tests run offline with synthetic fixtures, Airflow stubs, and mocked tracking and
+subprocess boundaries. No cloud credentials, containers, clusters, or running
+external services are required. See [CLAUDE.md](CLAUDE.md) for contributor rules.
 
 ```bash
+uv run pytest
+uv run --locked mypy
 uv run prek run --all-files
-```
-
-Run the pre-push tests manually:
-
-```bash
 uv run --locked prek run --all-files --hook-stage pre-push
 ```
 
-## Run training
+Prek runs whitespace/configuration checks and Ruff fixes/formatting before commits
+and tests before pushes. Notebook dependencies are optional:
 
 ```bash
-uv sync --group modeling --group dev
-uv run train-model --max-iter 300
-uv run python -m credit_scoring.training.main --help
-uv run train-model --max-iter 300 --enable-mlflow --mlflow-experiment credit-scoring
+uv sync --locked --group notebook
 ```
 
-## MLflow
+## Package structure
 
-MLflow is an experiment tracking tool for machine learning projects.
+| Path | Responsibility |
+| --- | --- |
+| `src/credit_scoring/data/` | CSV loading and repository-relative default path |
+| `src/credit_scoring/features/` | Target selection, stratified splitting, numeric preprocessing |
+| `src/credit_scoring/training/` | Logistic regression, CLI coordination, optional tracking |
+| `src/credit_scoring/evaluation/` | Accuracy, precision, recall, F1, ROC AUC, average precision (`pr_auc`) |
+| `src/credit_scoring/config/` | Typed environment settings |
+| `src/credit_scoring/logging.py` | Standard-library JSON application logging |
+| `src/credit_scoring/modeling/` | Thin compatibility re-exports and legacy entry point |
+| `dags/` | Scheduled Airflow workflows |
+| `tests/` | Tests mirroring package ownership and offline DAG tests |
 
-Use MLflow in this project to:
+The `train-model` script targets `credit_scoring.training.main:main`. Existing
+`credit_scoring.modeling` imports and `python -m credit_scoring.modeling.main`
+continue to delegate to the focused packages.
 
-- track training parameters (for example `max_iter`)
-- log evaluation metrics (`accuracy`, `precision`, `recall`, `f1`, `roc_auc`, `pr_auc`)
-- store trained model artifacts for reproducibility and comparison between runs
+## Training
 
-### How to use it
-
-1. Install modeling dependencies (includes MLflow):
+The supplied default dataset is `data/raw/UCI_Credit_Card.csv`. Training drops
+`ID`, uses a stratified split, imputes numeric features with medians, scales them,
+and fits baseline logistic regression. Existing tests preserve the split,
+preprocessing, model parameters, and six metrics.
 
 ```bash
-uv sync --group modeling --group dev
+uv run --locked train-model --max-iter 300
+uv run --locked train-model --help
+uv run --locked python -m credit_scoring.training.main --help
 ```
 
-2. Start the MLflow UI in a separate terminal (optional for local tracking):
+## Optional MLflow
+
+Tracking records iterations, evaluation metrics, and the model artifact. It does
+not implement registry registration or promotion. Local file tracking works with
+MLflow from the default modeling group:
 
 ```bash
-uv run mlflow ui
+uv run --locked train-model --max-iter 300 --enable-mlflow --mlflow-experiment credit-scoring
+uv run --locked mlflow ui
 ```
 
-Then open http://127.0.0.1:5000 in your browser.
-
-3. Run training with MLflow enabled:
+The UI defaults to http://127.0.0.1:5000. To use the existing Compose tracking server:
 
 ```bash
-uv run train-model --max-iter 300 --enable-mlflow --mlflow-experiment credit-scoring
+podman compose up -d mlflow
+uv run --locked train-model --max-iter 300 --enable-mlflow --mlflow-tracking-uri http://127.0.0.1:5000 --mlflow-experiment credit-scoring --mlflow-run-name baseline-lr
 ```
 
-4. Optionally set an explicit tracking server URI:
+Compose persists tracking data in `mlflow_data`. Its existing MLflow image uses a
+floating tag; the local stack is not a locked production deployment.
 
-```bash
-uv run train-model --max-iter 300 --enable-mlflow --mlflow-tracking-uri http://127.0.0.1:5000 --mlflow-experiment credit-scoring --mlflow-run-name baseline-lr
-```
+## Optional Airflow
 
-### Run MLflow with Docker Compose
+The [Compose file](docker-compose.yml) supplies Postgres, initialization, webserver,
+and scheduler services. Use rootless Podman with `podman-compose` installed as the
+primary local engine; Docker Compose is compatible with the same file (replace
+`podman compose` with `docker compose` in these commands).
 
-You can run a local MLflow tracking server with Docker Compose using `docker-compose.yml`.
-The compose service uses an external MLflow image (`ghcr.io/mlflow/mlflow:latest`).
-Data is persisted in a named volume (`mlflow_data`).
-
-1. Start MLflow:
-
-```bash
-docker compose up -d mlflow
-```
-
-2. Open MLflow UI:
-
-Open http://127.0.0.1:5000 in your browser.
-
-3. Run training against the Docker MLflow server:
-
-```bash
-uv run train-model --max-iter 300 --enable-mlflow --mlflow-tracking-uri http://127.0.0.1:5000 --mlflow-experiment credit-scoring
-```
-
-4. Stop MLflow:
-
-```bash
-docker compose down
-```
-
-To remove persisted MLflow data as well:
-
-```bash
-docker compose down -v
-```
-
-## Airflow DAGs
-
-Airflow DAGs available in this repository:
-
-- `dags/credit_scoring_training_dag.py` (`credit_scoring_training`): validates input data and runs training.
-- `dags/credit_scoring_data_quality_dag.py` (`credit_scoring_data_quality`): validates schema and missing-data ratio.
-- `dags/credit_scoring_retraining_dag.py` (`credit_scoring_retraining`): scheduled model retraining.
-
-### Task configuration
-
-Each task constructs fresh typed settings and configures application logging when it
-runs; DAG import does not validate the environment. The training DAG uses 300
-iterations unless `CREDIT_SCORING_MAX_ITER` overrides it. Retraining uses its separate
-`CREDIT_SCORING_RETRAIN_MAX_ITER` setting (default 500), and a nonempty tracking URI
-enables MLflow for retraining. Both subprocesses execute
-`python -m credit_scoring.training.main` with checked execution and inherit the task
-process environment, so dataset overrides reach the actual training input.
-
-Data-quality tasks require `ID`, `LIMIT_BAL`, `AGE`, and
-`default.payment.next.month`, and reject an overall missing ratio above the configured
-threshold. Offline tests use Airflow module stubs and mocked subprocesses; they do
-not install Airflow or test a running scheduler.
-
-### Local usage notes
-
-1. Copy the DAG into your Airflow `dags` folder (or point Airflow to this repository's `dags/` directory).
-2. Ensure your Airflow worker/scheduler has access to this repository source and data paths.
-3. Trigger `credit_scoring_training` from the Airflow UI.
-
-### Run Airflow with Docker Compose
-
-This repository includes a basic Airflow stack (`postgres`, `airflow-init`, `airflow-webserver`, `airflow-scheduler`) in `docker-compose.yml`.
-
-Before starting Airflow, create a local `.env` file and set credentials (minimum: `AIRFLOW_ADMIN_PASSWORD`):
+Copy [.env.example](.env.example) to `.env` and set your own
+`AIRFLOW_ADMIN_PASSWORD` before starting. For a POSIX shell:
 
 ```bash
 cp .env.example .env
-```
-
-Then edit `.env` and set a strong password, for example:
-
-```env
-AIRFLOW_ADMIN_PASSWORD=use-a-strong-unique-password
-```
-
-1. Start Airflow:
-
-```bash
-docker compose up -d postgres airflow-init airflow-webserver airflow-scheduler
-```
-
-If you use Podman Compose:
-
-```bash
 podman compose up -d postgres airflow-init airflow-webserver airflow-scheduler
 ```
 
-2. Open Airflow UI:
+Open http://127.0.0.1:8080 and log in as `admin` with that password. Enable and
+trigger the desired DAG:
 
-Open http://127.0.0.1:8080 in your browser.
+| DAG ID | Schedule | Tasks |
+| --- | --- | --- |
+| `credit_scoring_data_quality` | Daily | Require `ID`, `LIMIT_BAL`, `AGE`, `default.payment.next.month`; validate overall missing ratio |
+| `credit_scoring_training` | Daily | Validate dataset existence, then train (default 300 iterations) |
+| `credit_scoring_retraining` | Weekly | Validate dataset existence, then retrain (default 500 iterations) |
 
-3. Log in with credentials:
+Workers need access to source, dependencies, and data. Compose mounts `src/`,
+`dags/`, and `data/`; a separate Airflow installation needs equivalent access.
+Training subprocesses invoke `python -m credit_scoring.training.main` with checked
+execution and inherit the task environment. Retraining enables MLflow when its
+tracking URI is nonempty. Offline tests cover DAG task behavior with stubs, not a
+running scheduler. Kubeflow/Vertex pipelines remain planned.
 
-- username: `admin`
-- password: `AIRFLOW_ADMIN_PASSWORD` from `.env`
-
-4. Enable and trigger DAGs:
-
-- `credit_scoring_data_quality`
-- `credit_scoring_training`
-- `credit_scoring_retraining`
-
-5. Stop Airflow:
-
-```bash
-docker compose down
-```
-
-With Podman Compose:
+Stop the local stack while retaining its named data volumes:
 
 ```bash
 podman compose down
@@ -240,16 +201,9 @@ package move, including source-mounted Airflow's `/opt/airflow/project/data` pat
 Compose reads `.env` for interpolation, including `AIRFLOW_ADMIN_PASSWORD`. The
 existing service environment declarations do not forward every application setting;
 application settings must be explicitly provided to the task process environment.
-All three Airflow services install `pydantic-settings==2.12.0` alongside their existing
-modeling requirements. The image tag `apache/airflow:2.10.5` reports Python 3.12.9
-(`PYTHON_BASE_IMAGE=python:3.12-slim-bookworm`) in its published linux/amd64 image
-configuration ([published tag](https://hub.docker.com/r/apache/airflow/tags?name=2.10.5)),
-digest `sha256:b6e72f8ddc684ec9f9133042168afaab3d37a64d0dfe29e4c86727aa6c788c85`.
-The [settings release metadata](https://github.com/pydantic/pydantic-settings/blob/v2.12.0/pyproject.toml)
-declares Python >=3.10, Python 3.14 support, and Pydantic >=2.7; the
-[Airflow 2.10.5 Python 3.12 constraints](https://github.com/apache/airflow/blob/constraints-2.10.5/constraints-3.12.txt)
-include Pydantic 2.10.6. These requirements fit the existing image runtime without an
-Airflow upgrade. The project lock and tests verify settings under Python 3.14.
+The existing Airflow image has its own runtime and pinned modeling/settings
+requirements in Compose; it does not consume the project's Python 3.14 lock.
+The shared gate validates the package under Python 3.14.
 
 CLI status and metric text remain on stdout. Application logs are JSON lines on
 stderr with `timestamp` (UTC), `severity`, `logger`, and `event`. Training completion
@@ -260,23 +214,3 @@ records include formatted `exception` information. Setup affects only the
 `credit_scoring` logger namespace, is idempotent, and preserves root and Airflow
 handlers. Application events exclude dataset records, complete settings, credentials,
 and tracking URIs.
-
-## Project Structure
-
-- `src/credit_scoring/data/loader.py`: CSV loading and repository-relative default path
-- `src/credit_scoring/features/preprocess.py`: feature selection, splitting, and preprocessing
-- `src/credit_scoring/training/`: algorithm, CLI orchestration, and optional MLflow tracking
-- `src/credit_scoring/evaluation/metrics.py`: accuracy, precision, recall, F1, ROC AUC, and average precision (`pr_auc`)
-- `src/credit_scoring/config/settings.py`: typed environment configuration
-- `src/credit_scoring/logging.py`: standard-library JSON application logging
-- `src/credit_scoring/modeling/`: thin compatibility wrappers for existing exports and module imports
-- `dags/`: Airflow DAGs
-- `tests/`: test suite
-- `pyproject.toml`: project metadata and tooling config
-
-
-The `train-model` console script targets `credit_scoring.training.main:main`.
-Existing `credit_scoring.modeling` imports and
-`python -m credit_scoring.modeling.main` continue to delegate to the new packages.
-Tests mirror package ownership and cover compatibility, numerical regression,
-configuration, logging, and DAG behavior without external services.
