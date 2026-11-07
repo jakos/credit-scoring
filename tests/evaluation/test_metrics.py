@@ -10,7 +10,7 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
-from credit_scoring.modeling.evaluate import evaluate_predictions
+from credit_scoring.evaluation.metrics import evaluate_predictions
 
 
 def test_evaluate_predictions_returns_expected_metric_values() -> None:
@@ -20,7 +20,16 @@ def test_evaluate_predictions_returns_expected_metric_values() -> None:
 
     metrics = evaluate_predictions(y_true, y_pred, y_proba)
 
-    assert set(metrics) == {"accuracy", "precision", "recall", "f1", "roc_auc", "pr_auc"}
+    assert set(metrics) == {
+        "accuracy",
+        "precision",
+        "recall",
+        "f1",
+        "roc_auc",
+        "pr_auc",
+        "ks",
+        "gini",
+    }
     assert metrics["accuracy"] == pytest.approx(accuracy_score(y_true, y_pred))
     assert metrics["precision"] == pytest.approx(precision_score(y_true, y_pred, zero_division=0))
     assert metrics["recall"] == pytest.approx(recall_score(y_true, y_pred, zero_division=0))
@@ -46,9 +55,11 @@ def test_evaluate_predictions_returns_nan_roc_auc_for_single_class_ground_truth(
     y_pred = pd.Series([0, 0, 0, 0])
     y_proba = pd.Series([0.1, 0.2, 0.3, 0.4])
 
-    with pytest.warns(UndefinedMetricWarning, match="Only one class is present in y_true"):
-        with pytest.warns(UserWarning, match="No positive class found in y_true"):
-            metrics = evaluate_predictions(y_true, y_pred, y_proba)
+    with (
+        pytest.warns(UndefinedMetricWarning, match="Only one class is present in y_true"),
+        pytest.warns(UserWarning, match="No positive class found in y_true"),
+    ):
+        metrics = evaluate_predictions(y_true, y_pred, y_proba)
 
     assert metrics["pr_auc"] == 0.0
     assert metrics["roc_auc"] == pytest.approx(float("nan"), nan_ok=True)

@@ -1,6 +1,6 @@
 import pandas as pd
 
-from credit_scoring.modeling.data_loader import (
+from credit_scoring.data.loader import (
     load_credit_data,
 )
 
