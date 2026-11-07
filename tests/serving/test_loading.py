@@ -97,3 +97,51 @@ def test_unsupported_model_without_explanation() -> None:
     model = SimpleNamespace(feature_names_in_=["AGE"], classes_=[1, 0], predict_proba=Mock())
     with pytest.raises(ModelContractError, match="explanation"):
         validate_pipeline(model)
+
+
+def test_real_registry_construction_and_loading_are_read_only(
+    monkeypatch: pytest.MonkeyPatch, pipeline: Pipeline
+) -> None:
+    import credit_scoring.registry.mlflow_adapter as adapter
+
+    forbidden = Mock(side_effect=AssertionError("write forbidden"))
+    client = SimpleNamespace(
+        get_registered_model=Mock(return_value=SimpleNamespace(aliases={"champion": "7"})),
+        set_registered_model_alias=forbidden,
+        set_model_version_tag=forbidden,
+    )
+    mlflow = SimpleNamespace(
+        set_tracking_uri=Mock(),
+        set_experiment=forbidden,
+        start_run=forbidden,
+        register_model=forbidden,
+        log_text=forbidden,
+        set_tags=forbidden,
+        tracking=SimpleNamespace(MlflowClient=Mock(return_value=client)),
+        sklearn=SimpleNamespace(load_model=Mock(return_value=pipeline)),
+    )
+    monkeypatch.setattr(adapter, "import_module", Mock(return_value=mlflow))
+    configuration = ServingSettings(CREDIT_SCORING_MLFLOW_TRACKING_URI="http://registry")
+    snapshot = load_snapshot(configuration)
+    assert snapshot.predictor is pipeline
+    client.get_registered_model.assert_called_once_with("credit-scoring")
+    mlflow.sklearn.load_model.assert_called_once_with("models:/credit-scoring/7")
+    forbidden.assert_not_called()
+
+
+def test_loading_wrappers_preserve_causes(monkeypatch: pytest.MonkeyPatch) -> None:
+    from credit_scoring.serving.loading import RegistryLoadError
+
+    cause = ConnectionError("private-tracking-uri")
+    registry = Mock()
+    registry.resolve_alias.side_effect = cause
+    settings = ServingSettings(CREDIT_SCORING_MLFLOW_TRACKING_URI="http://registry")
+    with pytest.raises(RegistryLoadError) as caught:
+        load_snapshot(settings, registry=registry)
+    assert caught.value.__cause__ is cause
+    cause = ValueError("private-artifact-details")
+    monkeypatch.setattr("credit_scoring.serving.loading.build_explanation", Mock(side_effect=cause))
+    model = SimpleNamespace(feature_names_in_=["AGE"], classes_=[0, 1], predict_proba=Mock())
+    with pytest.raises(ModelContractError, match="explanation") as caught:
+        validate_pipeline(model)
+    assert caught.value.__cause__ is cause

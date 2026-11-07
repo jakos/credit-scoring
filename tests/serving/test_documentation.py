@@ -23,3 +23,26 @@ def test_documented_requests_match_openapi_and_execute(settings: ServingSettings
             payload = json.loads(match.group(1))
             assert payload == expected
             assert client.post(endpoint, json=payload).status_code == 200
+
+
+def test_serving_guide_describes_hardened_contracts() -> None:
+    guide = (Path(__file__).resolve().parents[2] / "docs" / "serving.md").read_text(
+        encoding="utf-8"
+    )
+    for phrase in (
+        "-1e12 through 1e12",
+        "4300-digit",
+        "HTTP 400",
+        "HTTP 422",
+        "zero-based insertion positions",
+        "cause_message",
+        "Failure details redacted",
+        "read-only registry operations",
+        "explicit partial failure",
+        "whitespace-padded",
+        "`/docs`",
+        "`/openapi.json`",
+        "require",
+        "the key when enabled",
+    ):
+        assert phrase in guide

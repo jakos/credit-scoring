@@ -64,3 +64,14 @@ def test_explanation_required_and_openapi_example() -> None:
     assert ScoreResponse.model_validate(SCORE_EXAMPLE).explanation.method == "linear_log_odds"
     with pytest.raises(ValidationError):
         ScoreResponse.model_validate({"probability_of_default": 0.5, "risk_band": "high"})
+
+
+@pytest.mark.parametrize("value", [1e308, -1e308, 10**400, -(10**400), 1e12 + 1, -1e12 - 1])
+def test_numeric_bound_rejects_extreme_finite_inputs(value: float | int) -> None:
+    with pytest.raises(ValidationError):
+        Applicant.model_validate({"features": {"AGE": value}})
+
+
+@pytest.mark.parametrize("value", [-1e12, 1e12, -(10**12), 10**12])
+def test_numeric_bound_is_inclusive(value: float | int) -> None:
+    assert Applicant.model_validate({"features": {"AGE": value}}).features["AGE"] == value

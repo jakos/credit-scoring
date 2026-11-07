@@ -19,6 +19,8 @@ build/
 dist/
 *.egg-info/
 mlflow-data/
+mlruns/
+mlartifacts/
 
 # IDE
 .vscode/

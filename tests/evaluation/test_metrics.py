@@ -63,3 +63,12 @@ def test_evaluate_predictions_returns_nan_roc_auc_for_single_class_ground_truth(
 
     assert metrics["pr_auc"] == 0.0
     assert metrics["roc_auc"] == pytest.approx(float("nan"), nan_ok=True)
+
+
+def test_nonzero_ks_from_empirical_class_distributions() -> None:
+    # At threshold 0.6, 2/3 positives and 0/3 negatives exceed the threshold.
+    # Other thresholds have smaller separation, so the maximum is 2/3.
+    truth = pd.Series([0, 1, 0, 0, 1, 1])
+    scores = pd.Series([0.1, 0.2, 0.3, 0.4, 0.6, 0.9])
+    metrics = evaluate_predictions(truth, (scores >= 0.5).astype(int), scores)
+    assert metrics["ks"] == pytest.approx(2 / 3)

@@ -42,3 +42,40 @@ def configure_logging(level: str = "INFO") -> logging.Logger:
     logger.setLevel(level)
     logger.propagate = False
     return logger
+
+
+# Only fixed application messages may cross the diagnostic logging boundary.
+# Third-party exceptions may interpolate entire input frames, URIs or credentials.
+_SAFE_FAILURE_MESSAGES = frozenset(
+    {
+        "No champion version is available",
+        "Required input feature metadata is missing",
+        "Feature names must be nonempty strings",
+        "Incompatible input feature metadata",
+        "Model must support predict_proba",
+        "Binary numeric class metadata is required",
+        "Binary classes must include default label 1 exactly once",
+        "Unsupported explanation contract",
+        "Registry lookup or model loading failed",
+        "Invalid probability shape",
+        "Invalid probability values",
+        "Missing explanation component",
+        "Invalid explanation count",
+        "Invalid explanation output",
+    }
+)
+
+
+def failure_fields(exc: Exception) -> dict[str, str]:
+    """Retain failure categories and trusted messages without serializing inputs."""
+    cause = exc.__cause__ or exc
+    message = str(exc) if str(exc) in _SAFE_FAILURE_MESSAGES else "Failure details redacted"
+    cause_message = (
+        str(cause) if str(cause) in _SAFE_FAILURE_MESSAGES else "Failure details redacted"
+    )
+    return {
+        "exception_type": type(exc).__name__,
+        "message": message,
+        "cause_type": type(cause).__name__,
+        "cause_message": cause_message,
+    }

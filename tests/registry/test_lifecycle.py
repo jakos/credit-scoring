@@ -13,7 +13,7 @@ from .fakes import FakeRegistry
 
 
 @pytest.fixture
-def prepared(monkeypatch):
+def prepared(monkeypatch: pytest.MonkeyPatch) -> tuple[pd.DataFrame, pd.DataFrame]:
     import credit_scoring.registry.lifecycle as module
 
     frame = pd.DataFrame({"amount": [10.0, 20, 30, 40], "default.payment.next.month": [0, 0, 1, 1]})
@@ -22,7 +22,7 @@ def prepared(monkeypatch):
     estimator = SimpleNamespace(get_params=lambda: {"max_iter": 50})
     pipeline = SimpleNamespace(named_steps={"model": estimator})
     artifact = LifecycleArtifacts(
-        pipeline, x, x, frame.iloc[:, 1], scores, scores, np.array([0, 0, 1, 1])
+        pipeline, x, x, frame.iloc[:, 1], scores, scores, np.array([0, 0, 1, 1]), 137
     )
     monkeypatch.setattr(
         module,
@@ -40,12 +40,13 @@ def champion(scores):
     return pipeline
 
 
-def test_bootstrap_and_cards_for_both_runs(prepared) -> None:
+def test_bootstrap_and_cards_for_both_runs(prepared: tuple[pd.DataFrame, pd.DataFrame]) -> None:
     frame, _ = prepared
     registry = FakeRegistry()
     assert run_lifecycle(frame, registry, load_policy()).approved
     assert registry.aliases == {"challenger": "2", "champion": "2"}
     assert len(registry.cards) == 2
+    assert all('"split_seed": 137' in card for card in registry.cards.values())
     assert registry.tags["2"]["promotion_status"] == "promoted"
     for card in registry.cards.values():
         for required in [
@@ -141,3 +142,21 @@ def test_incompatible_champion_class_order_fails_closed(prepared) -> None:
     with pytest.raises(ValueError, match="binary default classes"):
         run_lifecycle(frame, registry, load_policy())
     assert registry.aliases["champion"] == "old"
+
+
+@pytest.mark.parametrize("failure", ["card", "tags"])
+def test_metadata_failure_after_promotion_reports_partial_success(
+    prepared: tuple[pd.DataFrame, pd.DataFrame], failure: str
+) -> None:
+    frame, _ = prepared
+    registry = FakeRegistry()
+    registry.fail_metadata = failure
+    with pytest.raises(
+        RuntimeError, match=r"Champion alias assignment succeeded.*metadata recording failed"
+    ) as caught:
+        run_lifecycle(frame, registry, load_policy())
+    assert str(caught.value.__cause__) == f"{failure} unavailable"
+    assert registry.aliases["champion"] == "2"
+    assert registry.assignments == [("challenger", "2"), ("champion", "2")]
+    assert registry.tags["2"]["promotion_status"] == "pending"
+    assert ('"status": "promoted"' in registry.cards["2"]) is (failure == "tags")

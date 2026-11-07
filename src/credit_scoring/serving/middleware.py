@@ -76,6 +76,9 @@ class RequestMiddleware:
                 )
         except Exception:
             self.logger.error("serving_request_failed")
+            completed = False
+            if sent:
+                raise
             if not sent:
                 await JSONResponse({"detail": "Internal server error"}, status_code=500)(
                     scope, receive, correlated

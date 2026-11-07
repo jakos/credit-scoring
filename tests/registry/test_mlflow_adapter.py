@@ -1,6 +1,6 @@
 from contextlib import nullcontext
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 import pytest
 
@@ -25,12 +25,17 @@ def test_exact_registration_alias_load_and_artifact_calls() -> None:
     registry, mlflow, client = adapter()
     pipeline = SimpleNamespace(named_steps={"model": Mock()})
     pipeline.named_steps["model"].get_params.return_value = {"max_iter": 50}
+    mlflow.set_experiment.assert_not_called()
     model = registry.log_model(
         "lr",
         pipeline,
         {"roc_auc": 0.8},
         {"dataset_fingerprint": "abc"},
         lambda model: "pending card",
+    )
+    mlflow.set_experiment.assert_called_once_with("credit")
+    assert mlflow.mock_calls.index(call.set_experiment("credit")) < next(
+        i for i, c in enumerate(mlflow.mock_calls) if c[0] == "start_run"
     )
     assert (model.version, model.run_id, model.model_uri) == ("17", "run", "models:/returned-id")
     mlflow.register_model.assert_called_once_with(

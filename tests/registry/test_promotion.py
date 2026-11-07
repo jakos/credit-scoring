@@ -44,3 +44,15 @@ def test_missing_nonfinite_required_metrics(key, value) -> None:
     else:
         metrics[key] = value
     assert not decide(load_policy(), metrics).approved
+
+
+@pytest.mark.parametrize("auc,approved", [(0.81, True), (0.80, False)])
+@pytest.mark.parametrize("ks,gini", [(0.0, -1.0), (1.0, 1.0), (float("nan"), float("nan"))])
+def test_descriptive_metrics_cannot_change_champion_decision(
+    auc: float, approved: bool, ks: float, gini: float
+) -> None:
+    challenger = dict(roc_auc=auc, pr_auc=0.7, psi=0.01, ks=ks, gini=gini)
+    champion = dict(roc_auc=0.8, pr_auc=0.7, ks=1 - ks, gini=-gini)
+    decision = decide(load_policy(), challenger, champion)
+    assert decision.approved is approved
+    assert decision.reasons == (() if approved else ("roc_auc_improvement",))

@@ -29,6 +29,8 @@ def test_request_id_validation(
     records = [json.loads(line) for line in capsys.readouterr().err.splitlines()]
     access = [r for r in records if r["event"] == "serving_access"]
     assert len(access) == 1 and access[0]["request_id"] == resolved
+    if incoming and resolved != incoming:
+        assert incoming not in json.dumps(access[0])
 
 
 def test_combined_statuses_logs_and_redaction(
@@ -193,23 +195,44 @@ def test_incomplete_response_does_not_observe_probabilities() -> None:
         await send({"type": "http.response.start", "status": 200, "headers": []})
         raise RuntimeError("incomplete-response-sentinel")
 
+    messages = []
+
     async def send(message: Message) -> None:
-        pass
+        messages.append(message)
 
     metrics = Metrics()
-    middleware = RequestMiddleware(incomplete, metrics=metrics, logger=Mock(), key=None)
-    asyncio.run(
-        middleware(
-            {
-                "type": "http",
-                "app": FastAPI(),
-                "path": "/",
-                "method": "POST",
-                "headers": [],
-                "state": {"score_probabilities": [0.5]},
-            },
-            Mock(),
-            send,
+    logger = Mock()
+    middleware = RequestMiddleware(incomplete, metrics=metrics, logger=logger, key=None)
+    with pytest.raises(RuntimeError, match="incomplete-response-sentinel"):
+        asyncio.run(
+            middleware(
+                {
+                    "type": "http",
+                    "app": FastAPI(),
+                    "path": "/",
+                    "method": "POST",
+                    "headers": [],
+                    "state": {"score_probabilities": [0.5]},
+                },
+                Mock(),
+                send,
+            )
         )
+    assert [message["type"] for message in messages] == ["http.response.start"]
+    logger.error.assert_called_once_with("serving_request_failed")
+    assert logger.info.call_args.kwargs["extra"]["fields"]["status"] == 200
+    assert (
+        metrics.registry.get_sample_value(
+            "credit_scoring_http_requests_total",
+            {"method": "POST", "route": "unmatched", "status": "200"},
+        )
+        == 1
+    )
+    assert (
+        metrics.registry.get_sample_value(
+            "credit_scoring_http_requests_total",
+            {"method": "POST", "route": "unmatched", "status": "500"},
+        )
+        is None
     )
     assert metrics.registry.get_sample_value("credit_scoring_probability_of_default_count") == 0

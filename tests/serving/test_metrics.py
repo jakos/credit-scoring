@@ -124,3 +124,46 @@ def test_unknown_methods_and_paths_have_bounded_labels(settings: ServingSettings
         text = client.get("/metrics").text
         assert 'method="OTHER",route="unmatched",status="404"} 4.0' in text
         assert "PRIVATE" not in text and "/private/" not in text
+
+
+def test_response_failure_preserves_sent_status_and_excludes_scores() -> None:
+    import asyncio
+
+    import pytest
+    from fastapi import FastAPI
+    from starlette.types import Message, Receive, Scope, Send
+
+    from credit_scoring.serving.metrics import Metrics
+    from credit_scoring.serving.middleware import RequestMiddleware
+
+    async def fail(scope: Scope, receive: Receive, send: Send) -> None:
+        await send({"type": "http.response.start", "status": 202, "headers": []})
+        await send({"type": "http.response.body", "body": b"partial", "more_body": True})
+        raise RuntimeError("private-response-sentinel")
+
+    messages: list[Message] = []
+
+    async def send(message: Message) -> None:
+        messages.append(message)
+
+    metrics = Metrics()
+    middleware = RequestMiddleware(fail, metrics=metrics, logger=Mock(), key=None)
+    scope: Scope = {
+        "type": "http",
+        "app": FastAPI(),
+        "path": "/",
+        "method": "POST",
+        "headers": [],
+        "state": {"score_probabilities": [0.5]},
+    }
+    with pytest.raises(RuntimeError, match="private-response-sentinel"):
+        asyncio.run(middleware(scope, Mock(), send))
+    assert len(messages) == 2
+    assert (
+        metrics.registry.get_sample_value(
+            "credit_scoring_http_requests_total",
+            {"method": "POST", "route": "unmatched", "status": "202"},
+        )
+        == 1
+    )
+    assert metrics.registry.get_sample_value("credit_scoring_probability_of_default_count") == 0

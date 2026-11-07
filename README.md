@@ -178,8 +178,12 @@ model lookup errors propagate.
 the expected champion before assigning `champion` and refuses an observed change.
 MLflow alias updates are not transactional compare-and-swap; this does not supply a
 lock or guarantee safety for simultaneous writers. Failed alias assignments never
-report successful promotion. Held-out data is reused for selection and promotion;
-independent validation remains future work. Passing gates establishes neither
+report successful promotion. If champion assignment succeeds but final card or tag
+recording fails, the command explicitly reports partial failure and preserves the
+original cause. The champion alias remains assigned; metadata may be only partly
+updated. Inspect and repair metadata before retrying; no rollback occurs. Model cards
+record the actual split seed from training artifacts. Held-out data is reused for
+selection and promotion; independent validation remains future work. Passing gates establishes neither
 calibration, fairness, nor regulatory approval. See [ADR 0004](docs/adr/0004-model-registry-promotion.md).
 
 ## Online scoring
@@ -191,7 +195,11 @@ with configurable low/medium/high bands and native logistic log-odds explanation
 The serving guide also covers optional `CREDIT_SCORING_SERVING_API_KEY` authentication,
 public process-local Prometheus `/metrics`, request ids, and structured access logs.
 The service loads the exact `champion` version once at startup, or a trusted local
-MLflow sklearn model directory.
+MLflow sklearn model directory. Registry loading uses read-only operations and does
+not select or create experiments. Inputs must lie within -1e12 through 1e12 inclusive;
+out-of-range values return 422, while integers beyond Python's 4300-digit parser
+limit return 400. Unknown feature errors use safe numeric positions. Startup and
+prediction diagnostics retain exception categories and redacted cause messages.
 
 ```bash
 uv run --locked serve --help
@@ -200,7 +208,9 @@ uv run --locked python -m credit_scoring.serving.main --help
 
 After configuring a model source, `serve` exposes `POST /v1/score`,
 `POST /v1/score/batch` (1–1000 applicants), `/healthz`, and `/readyz` on
-`127.0.0.1:8000` by default. `/docs` and `/openapi.json` describe the contract.
+`127.0.0.1:8000` by default. `/docs` and `/openapi.json` describe the contract and
+require the API key when authentication is enabled. Keys with leading or trailing
+whitespace are rejected.
 Readiness remains 503 after a load failure; restart after source repair or a
 champion change. Risk bands partition model output and establish neither
 calibration nor lending eligibility.
