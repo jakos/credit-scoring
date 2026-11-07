@@ -108,8 +108,9 @@ def test_prediction_failure_is_distinct_and_sanitized() -> None:
     predictor = Mock()
     predictor.predict_proba.side_effect = RuntimeError("secret private path")
     scorer = Scorer(ModelSnapshot(predictor, FeatureContract(("AGE",)), 1), 0.2, 0.5)
-    with pytest.raises(PredictionError, match=r"^Model prediction failed$"):
+    with pytest.raises(PredictionError, match=r"^Model prediction failed$") as caught:
         scorer.score([{"AGE": 35}])
+    assert caught.value.__cause__ is predictor.predict_proba.side_effect
 
 
 def test_feature_validation_precedes_prediction_with_batch_locations() -> None:
@@ -132,3 +133,36 @@ def test_feature_validation_precedes_prediction_with_batch_locations() -> None:
 def test_invalid_injected_thresholds(snapshot: ModelSnapshot, medium: float, high: float) -> None:
     with pytest.raises(ValueError):
         Scorer(snapshot, medium, high)
+
+
+@pytest.mark.parametrize("batch", [False, True])
+def test_unknown_keys_have_distinct_insertion_positions(batch: bool) -> None:
+    predictor = Mock()
+    scorer = Scorer(ModelSnapshot(predictor, FeatureContract(("AGE",)), 1), 0.2, 0.5)
+    with pytest.raises(FeatureValidationError) as caught:
+        scorer.score([{"unknown-z-sentinel": 91, "AGE": 35, "unknown-a-sentinel": 92}], batch=batch)
+    prefix = ["body", "applicants", 0] if batch else ["body"]
+    assert [d.loc for d in caught.value.details] == [
+        [*prefix, "features", 0],
+        [*prefix, "features", 2],
+    ]
+    assert "sentinel" not in str(caught.value.details)
+    predictor.predict_proba.assert_not_called()
+
+
+@pytest.mark.parametrize("value", [1e308, -1e308, 10**400, -(10**400), 1e12 + 1, -1e12 - 1])
+def test_direct_scoring_rejects_out_of_range_before_prediction(value: int | float) -> None:
+    predictor = Mock()
+    scorer = Scorer(ModelSnapshot(predictor, FeatureContract(("AGE",)), 1), 0.2, 0.5)
+    with pytest.raises(FeatureValidationError) as caught:
+        scorer.score([{"AGE": value}])
+    assert caught.value.details[0].type == "feature_range"
+    predictor.predict_proba.assert_not_called()
+
+
+@pytest.mark.parametrize("value", [-1e12, 1e12, -(10**12), 10**12])
+def test_direct_scoring_accepts_inclusive_bounds(
+    snapshot: ModelSnapshot, value: int | float
+) -> None:
+    features = {**APPLICANT_EXAMPLE["features"], "AGE": value}
+    assert len(Scorer(snapshot, 0.2, 0.5).score([features])) == 1

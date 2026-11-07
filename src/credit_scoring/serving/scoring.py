@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from credit_scoring.serving.contracts import Explanation, ModelSnapshot
+from credit_scoring.serving.schemas import FEATURE_MAX, FEATURE_MIN
 
 
 @dataclass(frozen=True)
@@ -78,19 +79,21 @@ class Scorer:
                         finite = math.isfinite(float(value))
                     except OverflowError:
                         finite = False
-                    if not finite:
+                    if not finite or not FEATURE_MIN <= value <= FEATURE_MAX:
                         errors.append(
                             ValidationIssue(
                                 loc=[*prefix, "features", name],
-                                msg="Model feature must be representable as a finite float",
-                                type="finite_number",
+                                msg="Model feature must be between -1e12 and 1e12 inclusive",
+                                type="feature_range",
                             )
                         )
-            for _name in applicant.keys() - set(contract.names):
-                # Unknown keys can contain sensitive values; report the envelope only.
+            for position, name in enumerate(applicant):
+                if name in contract.names:
+                    continue
+                # Numeric positions preserve distinct locations without disclosing keys.
                 errors.append(
                     ValidationIssue(
-                        loc=[*prefix, "features"],
+                        loc=[*prefix, "features", position],
                         msg="Unknown model feature",
                         type="extra_forbidden",
                     )
@@ -120,8 +123,8 @@ class Scorer:
                 )
                 for p, explanation in zip(probabilities, explanations, strict=True)
             ]
-        except Exception:
-            raise PredictionError("Model prediction failed") from None
+        except Exception as exc:
+            raise PredictionError("Model prediction failed") from exc
 
 
 def _validate_explanation(explanation: Explanation, names: tuple[str, ...]) -> None:

@@ -24,17 +24,18 @@ See [package layout](docs/adr/0001-package-layout.md) and
 - [x] CSV loading, numeric preprocessing, stratified split, logistic regression, and six metrics (`src/credit_scoring/`).
 - [x] Optional MLflow parameter/metric/model-artifact tracking (`src/credit_scoring/training/tracking.py`).
 - [x] Scheduled validation, training, and retraining (`dags/`); see [orchestration](docs/adr/0003-workflow-orchestration.md).
-- [x] Model registry registration, exact version aliases, artifact lineage, and model cards (`src/credit_scoring/registry/`).
+- [x] Model registry registration, exact version aliases, artifact lineage, actual split metadata in model cards, and explicit partial promotion failures (`src/credit_scoring/registry/`).
 - [x] Deterministic logistic regression/HistGradientBoosting comparison, KS/Gini/PSI, pure promotion gates, and automated challenger/champion promotion; see [registry decision](docs/adr/0004-model-registry-promotion.md).
 - [ ] Automated rollback and additional approval workflows.
 
 ## Scoring service
 
 - [x] FastAPI single/batch prediction endpoints with validated schemas and configurable risk bands; see [serving guide](docs/serving.md).
-- [x] Fixed startup champion/local model snapshot and consistent inference preprocessing.
-- [x] Health/readiness endpoints, serving CLI, OpenAPI examples, and offline service tests.
+- [x] Fixed startup champion/local model snapshot, read-only registry loading, and consistent inference preprocessing.
+- [x] Health/readiness endpoints, actionable redacted diagnostics, serving CLI setting errors, OpenAPI contracts, and offline service tests.
+- [x] Inclusive numeric input bounds, parser-limit error coverage, and private numeric locations for unknown features.
 - [x] Native logistic log-odds explanations with deterministic top-five features and residuals.
-- [x] Optional API-key authentication, request ids, and JSON access logs.
+- [x] Optional API-key authentication with padded-key rejection, protected docs/schema, private request ids, and JSON access logs.
 - [x] Process-local Prometheus request, latency, and successful-score metrics.
 
 ## Containers

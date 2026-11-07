@@ -48,8 +48,17 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Train both families and run gated registry promotion (requires tracking URI).",
     )
-    parser.add_argument("--registered-model-name", default=None)
-    parser.add_argument("--promotion-policy-path", type=Path, default=None)
+    parser.add_argument(
+        "--registered-model-name",
+        default=None,
+        help="Registered model name for lifecycle promotion.",
+    )
+    parser.add_argument(
+        "--promotion-policy-path",
+        type=Path,
+        default=None,
+        help="Path to the lifecycle promotion policy.",
+    )
     args = parser.parse_args()
     overrides = {
         name: value

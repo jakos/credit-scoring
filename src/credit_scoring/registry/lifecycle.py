@@ -58,7 +58,7 @@ def run_lifecycle(
         "identity": "sha256:" + fingerprint,
         "target": TARGET_COLUMN,
         "features": {str(key): str(value) for key, value in current.x_train.dtypes.items()},
-        "split_seed": 42,
+        "split_seed": current.split_seed,
         "train_size": len(current.x_train),
         "test_size": len(current.x_test),
     }
@@ -93,6 +93,7 @@ def run_lifecycle(
             },
         )
 
+    champion_assigned = False
     try:
         for name, artifact in artifacts.items():
             outcomes[name] = "pending" if name == selected else "not_selected"
@@ -120,13 +121,18 @@ def run_lifecycle(
             if registry.resolve_alias("champion") != expected_champion:
                 raise RuntimeError("Champion changed during evaluation; refusing promotion")
             registry.assign_alias("champion", versions[selected].version)
+            champion_assigned = True
             outcomes[selected] = "promoted"
         else:
             outcomes[selected] = "rejected"
         record(selected)
         return decision
-    except Exception:
-        # Never claim successful assignment when any registry operation failed.
+    except Exception as exc:
+        if champion_assigned:
+            raise RuntimeError(
+                "Champion alias assignment succeeded; promotion metadata recording failed"
+            ) from exc
+        # Initial assignment has not succeeded.
         # Initial cards already exist before alias mutation; record failure where possible.
         if selected in versions and outcomes.get(selected) != "promoted":
             outcomes[selected] = "failed"

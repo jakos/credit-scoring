@@ -71,3 +71,31 @@ def test_blank_api_key_is_invalid(key: str) -> None:
         ServingSettings(
             CREDIT_SCORING_MLFLOW_TRACKING_URI="http://registry", CREDIT_SCORING_SERVING_API_KEY=key
         )
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        " padded-sentinel",
+        "padded-sentinel ",
+        "\tpadded-sentinel",
+        "padded-sentinel\n",
+        "\u2003padded-sentinel",
+    ],
+)
+def test_padded_api_keys_are_rejected_without_exposing_them(key: str) -> None:
+    with pytest.raises(ValidationError) as caught:
+        ServingSettings(
+            CREDIT_SCORING_MLFLOW_TRACKING_URI="http://registry", CREDIT_SCORING_SERVING_API_KEY=key
+        )
+    assert "padded with whitespace" in str(caught.value)
+    assert "padded-sentinel" not in str(caught.value)
+
+
+def test_unicode_api_key_is_preserved() -> None:
+    key = "synthetic-za\u017c\u00f3\u0142\u0107"
+    assert not key.isascii()
+    settings = ServingSettings(
+        CREDIT_SCORING_MLFLOW_TRACKING_URI="http://registry", CREDIT_SCORING_SERVING_API_KEY=key
+    )
+    assert settings.serving_api_key.get_secret_value() == key

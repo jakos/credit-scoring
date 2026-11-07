@@ -3,6 +3,8 @@ import json
 import sys
 from types import SimpleNamespace
 
+import pytest
+
 from credit_scoring.training import main as modeling_main
 
 
@@ -220,7 +222,9 @@ def test_cli_uses_environment_dataset_without_enabling_mlflow(
     assert "Model training completed." in capsys.readouterr().out
 
 
-def test_help_does_not_validate_train_or_contact_services(monkeypatch, capsys) -> None:
+def test_help_does_not_validate_train_or_contact_services(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     from unittest.mock import Mock
 
     import pytest
@@ -236,7 +240,10 @@ def test_help_does_not_validate_train_or_contact_services(monkeypatch, capsys) -
     assert result.value.code == 0
     trainer.assert_not_called()
     tracker.assert_not_called()
-    assert "--max-iter" in capsys.readouterr().out
+    help_text = capsys.readouterr().out
+    assert "--max-iter" in help_text
+    assert "Registered model name for lifecycle promotion" in help_text
+    assert "Path to the lifecycle promotion policy" in help_text
 
 
 def test_explicit_iterations_override_invalid_environment(monkeypatch) -> None:

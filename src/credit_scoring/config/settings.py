@@ -68,8 +68,10 @@ class ServingSettings(Settings):
     @field_validator("serving_api_key")
     @classmethod
     def validate_api_key(cls, value: SecretStr | None) -> SecretStr | None:
-        if value is not None and not value.get_secret_value().strip():
-            raise ValueError("API key must not be blank")
+        if value is not None:
+            key = value.get_secret_value()
+            if not key or key != key.strip():
+                raise ValueError("API key must not be blank or padded with whitespace")
         return value
 
     serving_model_source: Literal["registry", "local"] = Field(

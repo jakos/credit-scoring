@@ -19,7 +19,7 @@ class MLflowRegistry:
     ) -> None:
         self.mlflow = mlflow if mlflow is not None else import_module("mlflow")
         self.mlflow.set_tracking_uri(tracking_uri)
-        self.mlflow.set_experiment(experiment)
+        self.experiment = experiment
         self.client = client if client is not None else self.mlflow.tracking.MlflowClient()
         self.model_name = model_name
 
@@ -31,6 +31,7 @@ class MLflowRegistry:
         tags: dict[str, str],
         card: Callable[[ModelVersion], str],
     ) -> ModelVersion:
+        self.mlflow.set_experiment(self.experiment)
         lineage = {**tags, "algorithm": algorithm}
         with self.mlflow.start_run(run_name=algorithm, tags=lineage) as run:
             # Write a complete pending card immediately, even if logging or registration fails.

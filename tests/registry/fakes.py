@@ -15,6 +15,7 @@ class FakeRegistry:
         self.assignments = []
         self.change_champion = False
         self.fail_alias = None
+        self.fail_metadata = None
 
     def log_model(self, algorithm, pipeline, metrics, tags, card) -> ModelVersion:
         model = ModelVersion(
@@ -38,6 +39,11 @@ class FakeRegistry:
         self.assignments.append((alias, version))
         self.aliases[alias] = version
 
-    def record(self, model, card, tags) -> None:
+    def record(self, model: ModelVersion, card: str, tags: dict[str, str]) -> None:
+        promoted = tags["promotion_status"] == "promoted"
+        if promoted and self.fail_metadata == "card":
+            raise RuntimeError("card unavailable")
         self.cards[model.version] = card
+        if promoted and self.fail_metadata == "tags":
+            raise RuntimeError("tags unavailable")
         self.tags[model.version] = tags

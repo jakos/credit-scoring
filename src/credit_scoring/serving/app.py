@@ -12,7 +12,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.responses import Response
 
 from credit_scoring.config.settings import ServingSettings
-from credit_scoring.logging import configure_logging
+from credit_scoring.logging import configure_logging, failure_fields
 from credit_scoring.serving.contracts import Loader
 from credit_scoring.serving.loading import load_snapshot
 from credit_scoring.serving.metrics import Metrics
@@ -34,9 +34,8 @@ def create_app(settings: ServingSettings | None = None, loader: Loader = load_sn
             app.state.scorer = Scorer(
                 snapshot, configuration.risk_medium_threshold, configuration.risk_high_threshold
             )
-        except Exception:
-            # Exception text and tracebacks may contain credentials, paths or records.
-            logger.error("serving_model_load_failed")
+        except Exception as exc:
+            logger.error("serving_model_load_failed", extra={"fields": failure_fields(exc)})
         try:
             yield
         finally:
@@ -76,8 +75,32 @@ def create_app(settings: ServingSettings | None = None, loader: Loader = load_sn
     @app.exception_handler(RequestValidationError)
     async def invalid_request(request: Request, exc: RequestValidationError) -> JSONResponse:
         details = []
+        unknown_locations: set[tuple[str | int, ...]] = set()
         for error in exc.errors():
             location = list(error["loc"])
+            if "features" in location:
+                offset = location.index("features") + 1
+                scorer = request.app.state.scorer
+                known = scorer.snapshot.features.names if scorer is not None else ()
+                if len(location) > offset and location[offset] not in known:
+                    envelope = exc.body
+                    if location[:2] == ["body", "applicants"]:
+                        envelope = envelope["applicants"][location[2]]
+                    features = envelope.get("features", {}) if isinstance(envelope, dict) else {}
+                    position = next(
+                        (i for i, name in enumerate(features) if name == location[offset]), 0
+                    )
+                    location = [*location[:offset], position]
+                    if tuple(location) not in unknown_locations:
+                        unknown_locations.add(tuple(location))
+                        details.append(
+                            {
+                                "loc": location,
+                                "msg": "Unknown model feature",
+                                "type": "extra_forbidden",
+                            }
+                        )
+                    continue
             if error["type"] == "extra_forbidden":
                 location = location[:-1]
             details.append({"loc": location, "msg": error["msg"], "type": error["type"]})
@@ -97,7 +120,7 @@ def create_app(settings: ServingSettings | None = None, loader: Loader = load_sn
 
     @app.exception_handler(PredictionError)
     async def prediction_failed(request: Request, exc: PredictionError) -> JSONResponse:
-        logger.error("serving_prediction_failed")
+        logger.error("serving_prediction_failed", extra={"fields": failure_fields(exc)})
         return JSONResponse(status_code=500, content={"detail": "Model prediction failed"})
 
     return app

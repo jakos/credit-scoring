@@ -72,14 +72,17 @@ class LifecycleArtifacts:
     train_scores: np.ndarray
     test_scores: np.ndarray
     predictions: np.ndarray
+    split_seed: int
 
 
-def train_lifecycle(df: pd.DataFrame, max_iter: int = 1000) -> dict[str, LifecycleArtifacts]:
+def train_lifecycle(
+    df: pd.DataFrame, max_iter: int = 1000, *, random_state: int = 42
+) -> dict[str, LifecycleArtifacts]:
     """Fit both families on one split, with independent train-only preprocessing."""
     from sklearn.ensemble import HistGradientBoostingClassifier
 
     x, y = split_features_target(df, drop_columns=["ID"])
-    x_train, x_test, y_train, y_test = train_test_split_stratified(x, y)
+    x_train, x_test, y_train, y_test = train_test_split_stratified(x, y, random_state=random_state)
     numeric = x_train.select_dtypes(include="number").columns.tolist()
     estimators = {
         "logistic_regression": LogisticRegression(max_iter=max_iter, random_state=42),
@@ -99,5 +102,6 @@ def train_lifecycle(df: pd.DataFrame, max_iter: int = 1000) -> dict[str, Lifecyc
             pipeline.predict_proba(x_train)[:, 1],
             pipeline.predict_proba(x_test)[:, 1],
             np.asarray(pipeline.predict(x_test)),
+            random_state,
         )
     return results

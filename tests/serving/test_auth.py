@@ -70,3 +70,13 @@ def test_unicode_key_comparison_uses_utf8() -> None:
     scope = {"path": "/v1/score", "headers": [(b"x-api-key", key)]}
     assert authorized(scope, key)
     assert not authorized(scope, b"incorrect")
+
+
+def test_validated_unicode_key_authenticates() -> None:
+    key = "synthetic-za\u017c\u00f3\u0142\u0107"
+    assert not key.isascii()
+    settings = ServingSettings(
+        CREDIT_SCORING_MLFLOW_TRACKING_URI="http://registry", CREDIT_SCORING_SERVING_API_KEY=key
+    )
+    secret = settings.serving_api_key.get_secret_value().encode("utf-8")
+    assert authorized({"path": "/v1/score", "headers": [(b"x-api-key", secret)]}, secret)

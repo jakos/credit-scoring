@@ -56,3 +56,33 @@ def test_invalid_configuration_error_is_sanitized(
     with pytest.raises(SystemExit):
         main.parse_args([])
     assert "secret-value" not in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "name,value,expected",
+    [
+        ("CREDIT_SCORING_SERVING_PORT", "private-port-sentinel", "CREDIT_SCORING_SERVING_PORT"),
+        ("CREDIT_SCORING_MLFLOW_TRACKING_URI", " ", "CREDIT_SCORING_MLFLOW_TRACKING_URI"),
+        ("CREDIT_SCORING_RISK_MEDIUM_THRESHOLD", "0.9", "CREDIT_SCORING_RISK_MEDIUM_THRESHOLD"),
+        ("CREDIT_SCORING_SERVING_MODEL_SOURCE", "local", "CREDIT_SCORING_SERVING_MODEL_PATH"),
+        ("CREDIT_SCORING_SERVING_API_KEY", " key-sentinel ", "CREDIT_SCORING_SERVING_API_KEY"),
+    ],
+)
+def test_configuration_errors_name_settings_without_inputs(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    name: str,
+    value: str,
+    expected: str,
+) -> None:
+    monkeypatch.setenv(
+        "CREDIT_SCORING_MLFLOW_TRACKING_URI", "http://user:credential-sentinel@tracking-sentinel"
+    )
+    monkeypatch.setenv(name, value)
+    with pytest.raises(SystemExit) as caught:
+        main.parse_args([])
+    assert caught.value.code == 2
+    error = capsys.readouterr().err
+    assert expected in error
+    assert "sentinel" not in error
+    assert "input_value" not in error

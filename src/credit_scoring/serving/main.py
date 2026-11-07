@@ -32,10 +32,28 @@ def parse_args(argv: Sequence[str] | None = None) -> ServingSettings:
     }
     try:
         return ServingSettings(**overrides)
-    except ValidationError:
-        parser.error(
-            "Invalid serving settings; check model source, required source settings, thresholds, host and port"
-        )
+    except ValidationError as exc:
+        aliases = {str(field.validation_alias) for field in ServingSettings.model_fields.values()}
+        model_errors = {
+            "Value error, Medium threshold must be below high threshold": [
+                "CREDIT_SCORING_RISK_MEDIUM_THRESHOLD",
+                "CREDIT_SCORING_RISK_HIGH_THRESHOLD",
+            ],
+            "Value error, Local serving requires an existing model directory": [
+                "CREDIT_SCORING_SERVING_MODEL_PATH"
+            ],
+            "Value error, Registry serving requires a nonempty tracking URI": [
+                "CREDIT_SCORING_MLFLOW_TRACKING_URI"
+            ],
+        }
+        names: set[str] = set()
+        for error in exc.errors(include_input=False):
+            names.update(str(part) for part in error["loc"] if str(part) in aliases)
+            if not error["loc"]:
+                names.update(
+                    model_errors.get(error["msg"], ["CREDIT_SCORING_SERVING_MODEL_SOURCE"])
+                )
+        parser.error("Invalid serving settings: " + ", ".join(sorted(names)))
 
 
 def main() -> None:

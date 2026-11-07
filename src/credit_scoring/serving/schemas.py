@@ -4,7 +4,13 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt
 
-FeatureValue = Annotated[StrictFloat, Field(allow_inf_nan=False)] | StrictInt | None
+FEATURE_MIN = -1e12
+FEATURE_MAX = 1e12
+FeatureValue = (
+    Annotated[StrictFloat, Field(ge=FEATURE_MIN, le=FEATURE_MAX, allow_inf_nan=False)]
+    | Annotated[StrictInt, Field(ge=FEATURE_MIN, le=FEATURE_MAX)]
+    | None
+)
 
 # Synthetic values, using the numeric feature names selected by default training.
 APPLICANT_EXAMPLE: dict[str, Any] = {

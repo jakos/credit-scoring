@@ -14,6 +14,10 @@ from credit_scoring.serving.contracts import FeatureContract, ModelSnapshot
 from credit_scoring.serving.explanations import build_explanation
 
 
+class RegistryLoadError(RuntimeError):
+    """Registry access failed while resolving or loading the champion."""
+
+
 class ModelContractError(ValueError):
     """Artifact metadata cannot establish a compatible serving contract."""
 
@@ -63,8 +67,8 @@ def validate_pipeline(pipeline: Any) -> ModelSnapshot:
         raise ModelContractError("Binary classes must include default label 1 exactly once")
     try:
         explainer = build_explanation(pipeline, names, int(indexes[0]))
-    except Exception:
-        raise ModelContractError("Unsupported explanation contract") from None
+    except Exception as exc:
+        raise ModelContractError("Unsupported explanation contract") from exc
     return ModelSnapshot(
         pipeline,
         FeatureContract(names, _nullable_features(pipeline, names)),
@@ -79,16 +83,19 @@ def load_snapshot(settings: ServingSettings, *, registry: Registry | None = None
 
         pipeline = load_model(str(settings.serving_model_path))
     else:
-        if registry is None:
-            if settings.mlflow_tracking_uri is None:
-                raise ValueError("Registry serving requires a tracking URI")
-            registry = MLflowRegistry(
-                settings.mlflow_tracking_uri,
-                settings.mlflow_experiment,
-                settings.registered_model_name,
-            )
-        version = registry.resolve_alias("champion")
+        try:
+            if registry is None:
+                if settings.mlflow_tracking_uri is None:
+                    raise ValueError("Registry serving requires a tracking URI")
+                registry = MLflowRegistry(
+                    settings.mlflow_tracking_uri,
+                    settings.mlflow_experiment,
+                    settings.registered_model_name,
+                )
+            version = registry.resolve_alias("champion")
+            pipeline = registry.load_pipeline(version) if version is not None else None
+        except Exception as exc:
+            raise RegistryLoadError("Registry lookup or model loading failed") from exc
         if version is None:
             raise ModelContractError("No champion version is available")
-        pipeline = registry.load_pipeline(version)
     return validate_pipeline(pipeline)

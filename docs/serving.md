@@ -31,8 +31,18 @@ uv run --locked serve --host 127.0.0.1 --port 8000
 ```
 
 At startup the adapter resolves `champion` to an exact version and loads that
-version once. No alias mutation, polling, fallback, or automatic refresh occurs.
+version once. Registry construction and loading perform read-only registry operations:
+no experiment selection or creation, model logging, tag writes, or alias writes.
+Serving credentials need read access to the registry and artifacts. Training selects
+its experiment only when logging a model. No polling, fallback, or automatic refresh occurs.
 Restart the service to adopt a new champion or retry a failed load.
+
+Promotion assigns the champion alias separately from recording its final card and
+tags. A later metadata write failure reports an explicit partial failure: assignment
+succeeded and metadata recording failed, with the original cause preserved. The
+alias remains assigned and metadata may be partially updated; inspect and repair
+it before retrying. There is no automatic rollback. See the
+[registry lifecycle](../README.md#registry-lifecycle).
 
 Local mode loads a trusted **MLflow sklearn model directory**, containing `MLmodel`
 and its serialized pipeline. A raw pickle or joblib file is not a supported source.
@@ -85,13 +95,14 @@ The application factory accepts explicit settings and a loader for tests.
 | `CREDIT_SCORING_RISK_HIGH_THRESHOLD` | `0.50` | Inclusive lower boundary of high risk |
 | `CREDIT_SCORING_MLFLOW_TRACKING_URI` | unset | Nonempty URI required in registry mode |
 | `CREDIT_SCORING_REGISTERED_MODEL_NAME` | `credit-scoring` | Shared registry model name; must not be blank |
-| `CREDIT_SCORING_MLFLOW_EXPERIMENT` | `credit-scoring` | Shared adapter experiment setting |
-| `CREDIT_SCORING_SERVING_API_KEY` | unset | Optional nonblank secret; unset disables authentication |
+| `CREDIT_SCORING_MLFLOW_EXPERIMENT` | `credit-scoring` | Training experiment; not selected during serving |
+| `CREDIT_SCORING_SERVING_API_KEY` | unset | Optional nonblank secret without leading or trailing whitespace; unset disables authentication |
 | `LOG_LEVEL` | `INFO` | Inherited JSON application logging level |
 
 Thresholds must be finite and satisfy `0 < medium < high < 1`. Invalid settings
-stop startup. An existing local directory whose artifact is broken instead leaves
-the application live but unready. Neither source requires registry lifecycle
+stop startup. CLI errors identify the invalid setting names without their values
+or a complete settings dump. An existing local directory whose artifact is broken
+instead leaves the application live but unready. Neither source requires registry lifecycle
 enablement through `CREDIT_SCORING_REGISTRY_ENABLED`.
 
 ## Applicant contract
@@ -103,8 +114,10 @@ by the loaded artifact, with no additional names. Feature names come from fitted
 training pipeline uses the 23 feature names in the example below. A model trained
 on a different dataset can require a different contract.
 
-Values must be finite JSON numbers or explicit `null`; numeric strings and
-booleans are rejected. `null` is accepted only for features covered by the
+Values must be finite JSON numbers in the inclusive range **-1e12 through 1e12**
+or explicit `null`. The same bound applies to integers and floats and is published
+in OpenAPI. Values outside the bound return HTTP 422 before inference in both
+endpoints; numeric strings and booleans are rejected. `null` is accepted only for features covered by the
 inherited fitted median imputer with a finite training statistic. Missing keys
 are always errors, even when explicit null is supported. Extra envelope fields
 are forbidden. JSON key order does not matter: scoring constructs a DataFrame
@@ -242,6 +255,16 @@ failure emits the sanitized `serving_model_load_failed` application event and
 leaves the process live but unready. Repair the source and restart. A successful
 startup holds its snapshot until shutdown, when per-app model state is cleared.
 
+Python's configured 4300-digit integer conversion limit is unchanged. A raw JSON
+body containing an integer with more than 4300 digits fails parsing with HTTP 400,
+before numeric validation. Smaller parsed integers outside the feature bound return
+422. This applies to both scoring endpoints.
+
+Unknown feature keys use their zero-based insertion positions beneath `features`,
+for example `["body", "features", 23]` or
+`["body", "applicants", 1, "features", 23]`. Each unknown key has a distinct position;
+its name and value are omitted, including when its value fails schema validation.
+
 Request validation returns HTTP 422 with field locations and batch indexes,
 without echoing raw values. For example, if the second batch member is missing
 `AGE`, a response includes:
@@ -259,9 +282,17 @@ context. Invalid model predictions return HTTP 500:
 {"detail":"Model prediction failed"}
 ```
 
-The application logs `serving_prediction_failed` without exception text or
-tracebacks. Neither API errors nor application events include applicant records,
-registry credentials, or filesystem paths.
+The application logs `serving_prediction_failed` with `exception_type`,
+`cause_type`, `message`, and `cause_message`. Startup failures use the same fields
+on `serving_model_load_failed`. Only fixed application diagnostic messages are
+retained; arbitrary dependency exception messages become `Failure details redacted`.
+Original exception causes remain available internally, but logs omit tracebacks.
+Missing champions report `No champion version is available`; incompatible artifacts
+report the failed model contract; registry access failures report
+`Registry lookup or model loading failed` with the underlying exception type.
+Check champion assignment, artifact compatibility, or registry access respectively,
+then restart after repairing a load failure. Neither API errors nor application
+events include applicant records, registry credentials, or filesystem paths.
 
 ## OpenAPI and offline verification
 
@@ -306,8 +337,9 @@ explanations return sanitized 500 errors for the entire request, with no partial
 ## Authentication and correlation
 
 Authentication is disabled when `CREDIT_SCORING_SERVING_API_KEY` is unset. Explicitly
-empty or whitespace-only values are invalid. Set a secret in the process environment
-before starting; it takes effect after restart. For example, in Bash:
+empty, whitespace-only, or leading/trailing whitespace-padded values are invalid;
+keys are never trimmed. Valid Unicode keys are preserved. Set a secret in the process
+environment before starting; it takes effect after restart. For example, in Bash:
 
 ```bash
 read -r -s CREDIT_SCORING_SERVING_API_KEY
@@ -334,13 +366,18 @@ Every response carries `X-Request-ID`. An incoming id is preserved only when it 
 1 to 128 ASCII letters, digits, dots, underscores, or hyphens. Missing, duplicate, or
 invalid ids are replaced with a UUID. Correlation stays local to each request.
 
-One JSON `serving_access` event is emitted per completed request, including metrics
+One JSON `serving_access` event is emitted per request, including metrics
 scrapes and rejected requests. Alongside the inherited `timestamp`, `severity`,
 `logger`, and `event`, fields are `request_id`, `method`, `route`, `status`, and
 `duration_seconds` (nonnegative monotonic elapsed seconds). Methods use a bounded
 HTTP vocabulary with `OTHER` as fallback; routes use matched templates or `unmatched`.
 Logs exclude raw URLs, queries, bodies, headers, credentials, and applicant data.
 Uvicorn access logging is disabled to avoid a duplicate unstructured stream.
+Rejected request ids are absent from the entire access event. An unexpected failure
+before response start produces a sanitized 500. After response start, the middleware
+logs `serving_request_failed` at error severity and re-raises to the ASGI caller,
+without sending another response. Access logs and request metrics retain the status
+already sent; incomplete responses never add successful probability observations.
 
 ## Prometheus metrics
 

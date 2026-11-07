@@ -34,15 +34,15 @@ serving = [
   "uvicorn>=0.38",
 ]
 modeling = [
-  "mlflow>=2.16",
-  "pandas>=2.2",
+  "mlflow>=3",
+  "pandas>=2.3,<2.4",
   "numpy>=2.0",
   "scikit-learn>=1.5"
 ]
 notebook = [
   "ipykernel>=7.0",
   "ipython>=9.0",
-  "pandas>=2.2",
+  "pandas>=2.3,<2.4",
   "numpy>=2.0",
   "matplotlib>=3.9",
   "seaborn>=0.13"
